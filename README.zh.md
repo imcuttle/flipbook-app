@@ -5,6 +5,9 @@
 > 在生成的图片上任意位置长按。后端会推断你点的是什么、必要时联网搜索资料、
 > 生成一张子图并把它链回来。一本可以"点出来"的可探索画册 —— 一次一个点击。
 
+> 本项目基于 [flipbook.page](https://flipbook.page) 的产品理念设计与实现，
+> "点击图片继续往下钻"的画布交互思路源自该产品，特此致谢原团队。
+
 ![Flipbook Canvas 演示](./docs/assets/demo.gif)
 
 `flipbook-canvas` skill 的常驻 Web 产品版：Express + SSE 后端、Vite + React

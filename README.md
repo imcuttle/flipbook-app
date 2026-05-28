@@ -6,6 +6,10 @@
 > searches the web if useful, generates a child diagram, and links it back.
 > A flipbook of explorable knowledge — one click at a time.
 
+> Inspired by and a re-implementation of the product idea behind
+> [flipbook.page](https://flipbook.page) — credit goes to the original team
+> for the click-to-explore canvas concept.
+
 ![Flipbook Canvas demo](./docs/assets/demo.gif)
 
 A long-running web product version of the `flipbook-canvas` skill: Express + SSE

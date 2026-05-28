@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import styles from '../styles/Canvas.module.css';
 import type { Node, PendingClick } from '../state/types';
 import { HotspotCard } from './HotspotCard';
@@ -99,6 +99,60 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
 
   const layouts = node && showLabels ? layOutHotspots(node.hotspots) : [];
 
+  // --- Leader-line geometry: measure card rects so the line lands on the
+  // actual card edge instead of a guessed centre. We re-measure whenever
+  // layouts (anchors) change, the node changes, or the window resizes.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // Card rects in PERCENT of the stage (left, top, w, h). Index aligns with
+  // layouts[*].idx. Empty until first measurement after mount.
+  const [cardRects, setCardRects] = useState<Record<number, { l: number; t: number; w: number; h: number }>>({});
+
+  useLayoutEffect(() => {
+    if (!stageRef.current || layouts.length === 0) {
+      if (Object.keys(cardRects).length) setCardRects({});
+      return;
+    }
+    const measure = () => {
+      const stageRect = stageRef.current?.getBoundingClientRect();
+      if (!stageRect || stageRect.width === 0 || stageRect.height === 0) return;
+      const next: Record<number, { l: number; t: number; w: number; h: number }> = {};
+      for (const { idx } of layouts) {
+        const btn = cardRefs.current[idx];
+        if (!btn) continue;
+        const r = btn.getBoundingClientRect();
+        next[idx] = {
+          l: ((r.left - stageRect.left) / stageRect.width) * 100,
+          t: ((r.top - stageRect.top) / stageRect.height) * 56.25,
+          w: (r.width / stageRect.width) * 100,
+          h: (r.height / stageRect.height) * 56.25,
+        };
+      }
+      setCardRects(next);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node?.hash, layouts.length, JSON.stringify(layouts.map((l) => [l.idx, l.anchor[0], l.anchor[1]]))]);
+
+  // Compute where the leader line should touch the card box: project the
+  // leader endpoint onto the card edge nearest to it (so the line never
+  // overlaps the card text and always lands on its border).
+  function attachPoint(card: { l: number; t: number; w: number; h: number }, lx: number, ly: number) {
+    const cx = card.l + card.w / 2;
+    const cy = card.t + card.h / 2;
+    const dx = lx - cx;
+    const dy = ly - cy;
+    if (dx === 0 && dy === 0) return [cx, cy] as const;
+    // Find scale t such that |t*dx| <= w/2 and |t*dy| <= h/2 — i.e. the
+    // line from card centre to (lx,ly) hits the card's bounding box edge.
+    const tx = dx === 0 ? Infinity : (card.w / 2) / Math.abs(dx);
+    const ty = dy === 0 ? Infinity : (card.h / 2) / Math.abs(dy);
+    const t = Math.min(tx, ty);
+    return [cx + dx * t, cy + dy * t] as const;
+  }
+
   let stageClass = styles.stage;
   if (readOnly) stageClass += ` ${styles.stageReadOnly}`;
   else if (atCapacity) stageClass += ` ${styles.stageBusy}`;
@@ -126,6 +180,7 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
       )}
       <div className={styles.stageWrap}>
       <div
+        ref={stageRef}
         className={stageClass}
         style={stageStyle}
         onPointerDown={handlePointerDown}
@@ -151,14 +206,17 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
             preserveAspectRatio="none"
             aria-hidden
           >
-            {layouts.map(({ anchor, leader, idx }) => {
-              const cardCenterX = (anchor[0] + 0.09) * 100;
-              const cardCenterY = (anchor[1] + 0.03) * 56.25;
+            {layouts.map(({ idx, leader }) => {
               const tx = leader[0] * 100;
               const ty = leader[1] * 56.25;
+              const card = cardRects[idx];
+              // Until the card has been measured, fall back to a no-op (skip
+              // drawing rather than draw to a wrong guessed point).
+              if (!card) return null;
+              const [sx, sy] = attachPoint(card, tx, ty);
               return (
                 <g key={idx}>
-                  <line x1={cardCenterX} y1={cardCenterY} x2={tx} y2={ty} />
+                  <line x1={sx} y1={sy} x2={tx} y2={ty} />
                   <circle cx={tx} cy={ty} r="0.5" />
                 </g>
               );
@@ -171,6 +229,7 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
           {node && layouts.map(({ anchor, idx }) => (
             <HotspotCard
               key={idx}
+              ref={(el) => { cardRefs.current[idx] = el; }}
               hotspot={node.hotspots[idx]}
               index={idx}
               anchor={anchor}

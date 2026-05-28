@@ -262,16 +262,16 @@ export async function callWebSearch({
   ].join('\n');
 
   const captured = [];
-  // Debug: capture every stream-json event for inspection.
-  const dbgEvents = [];
-  const dbgRawEvents = [];
+  // Kept only when nothing parsed — surfaced as a fallback debug dump so we can
+  // diagnose future tool_result format changes without re-instrumenting code.
+  const failureSamples = [];
 
   return sem.run(async () => {
     let lastErr;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         captured.length = 0;
-        dbgEvents.length = 0;
+        failureSamples.length = 0;
         const frame = JSON.stringify({
           type: 'user',
           message: { role: 'user', content: userMessage },
@@ -289,36 +289,39 @@ export async function callWebSearch({
             let evt;
             try { evt = JSON.parse(line); } catch { return; }
             if (onEvent) { try { onEvent(evt); } catch {} }
-            // Record full event for raw inspection (capped to keep memory sane).
-            if (dbgRawEvents.length < 50) dbgRawEvents.push(evt);
-            // Record a compact summary of each event for debugging.
-            try {
-              dbgEvents.push({
-                type: evt?.type,
-                role: evt?.message?.role,
-                contentTypes: Array.isArray(evt?.message?.content)
-                  ? evt.message.content.map((c) => c?.type).slice(0, 10)
-                  : null,
-                toolName: evt?.message?.content?.find?.((c) => c?.type === 'tool_use')?.name,
-                hasToolResult: !!evt?.message?.content?.find?.((c) => c?.type === 'tool_result'),
-              });
-            } catch {}
             if (evt?.type !== 'user' || !Array.isArray(evt?.message?.content)) return;
             for (const c of evt.message.content) {
               if (c?.type !== 'tool_result') continue;
+              const before = captured.length;
               const raw = c?._meta?.rawResponse;
               if (raw && Array.isArray(raw.results)) {
                 pushSearchResults(captured, raw.results);
-                continue;
+              } else {
+                const items = Array.isArray(c.content) ? c.content : [];
+                for (const item of items) {
+                  if (item?.type !== 'text' || typeof item.text !== 'string') continue;
+                  // 1) JSON-shaped (older clients)
+                  let parsedJson = null;
+                  try {
+                    const j = JSON.parse(item.text);
+                    const arr = Array.isArray(j?.results) ? j.results : Array.isArray(j) ? j : [];
+                    if (arr.length) { pushSearchResults(captured, arr); parsedJson = true; }
+                  } catch { /* not JSON; fall through to markdown */ }
+                  if (parsedJson) continue;
+                  // 2) Markdown-shaped (current codebuddy CLI WebSearch output)
+                  const mdResults = parseSearchMarkdown(item.text);
+                  if (mdResults.length) pushSearchResults(captured, mdResults);
+                }
               }
-              const items = Array.isArray(c.content) ? c.content : [];
-              for (const item of items) {
-                if (item?.type !== 'text' || typeof item.text !== 'string') continue;
-                try {
-                  const j = JSON.parse(item.text);
-                  const arr = Array.isArray(j?.results) ? j.results : Array.isArray(j) ? j : [];
-                  pushSearchResults(captured, arr);
-                } catch { /* not JSON; ignore */ }
+              // If this tool_result yielded nothing, hold a small sample for
+              // later dump in case all queries come up empty.
+              if (captured.length === before && failureSamples.length < 3) {
+                const items = Array.isArray(c.content) ? c.content : [];
+                const text = items.find((i) => i?.type === 'text')?.text;
+                failureSamples.push({
+                  preview: typeof text === 'string' ? text.slice(0, 600) : null,
+                  hasMeta: !!c?._meta,
+                });
               }
             }
           },
@@ -331,12 +334,12 @@ export async function callWebSearch({
           out.push(r);
           if (out.length >= perQueryMax * queries.length) break;
         }
-        // If we got nothing back, dump the event summary to disk for inspection.
-        if (out.length === 0) {
+        // No results parsed from any tool_result: dump a small diagnostic file.
+        if (out.length === 0 && failureSamples.length) {
           try {
             await fs.writeFile(
-              `/tmp/flipbook-websearch-debug-${Date.now()}.json`,
-              JSON.stringify({ queries, dbgEvents, dbgRawEvents, capturedRaw: captured }, null, 2),
+              `/tmp/flipbook-websearch-empty-${Date.now()}.json`,
+              JSON.stringify({ queries, failureSamples }, null, 2),
             );
           } catch {}
         }
@@ -361,6 +364,42 @@ function pushSearchResults(out, arr) {
       source: String(r.source ?? r.host ?? hostnameOf(r.url ?? r.link ?? '')).slice(0, 80),
     });
   }
+}
+
+/**
+ * Parse the markdown form codebuddy's WebSearch tool returns.
+ * Each result block looks like:
+ *
+ *   ## 1. [Title](https://url...)
+ *
+ *   snippet text...
+ *
+ *   **URL:** https://url...
+ *
+ *   ---
+ *
+ * Returns [{title, url, snippet}].
+ */
+function parseSearchMarkdown(text) {
+  if (!text || typeof text !== 'string') return [];
+  const out = [];
+  // Split on result headings: "## <num>. " — we use a lookahead so the heading
+  // stays attached to its block.
+  const blocks = text.split(/\n(?=##\s+\d+\.\s+)/g);
+  for (const block of blocks) {
+    const headRe = /^##\s+\d+\.\s+\[([^\]]+)\]\(([^)]+)\)/m;
+    const head = block.match(headRe);
+    if (!head) continue;
+    const title = head[1].trim();
+    const url = head[2].trim();
+    // Snippet: everything after the heading up to the **URL:** marker (or block end).
+    const afterHead = block.slice(head.index + head[0].length);
+    const stop = afterHead.search(/\n\s*\*\*URL:\*\*/);
+    const snippetSrc = stop >= 0 ? afterHead.slice(0, stop) : afterHead;
+    const snippet = snippetSrc.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+    out.push({ title, url, snippet });
+  }
+  return out;
 }
 
 function hostnameOf(u) {

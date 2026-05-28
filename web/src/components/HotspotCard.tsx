@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import styles from '../styles/HotspotCard.module.css';
 import { pct } from '../lib/geometry';
 import type { Hotspot } from '../state/types';
@@ -9,7 +10,10 @@ type Props = {
   onClick: (index: number) => void;
 };
 
-export function HotspotCard({ hotspot, index, anchor, onClick }: Props) {
+export const HotspotCard = forwardRef<HTMLButtonElement, Props>(function HotspotCard(
+  { hotspot, index, anchor, onClick }: Props,
+  ref,
+) {
   const linked = !!hotspot.next_hash;
   const cls = [
     styles.hotspot,
@@ -18,6 +22,7 @@ export function HotspotCard({ hotspot, index, anchor, onClick }: Props) {
 
   return (
     <button
+      ref={ref}
       type="button"
       className={cls}
       style={{ left: pct(anchor[0]), top: pct(anchor[1]) }}
@@ -35,4 +40,4 @@ export function HotspotCard({ hotspot, index, anchor, onClick }: Props) {
       <span className={styles.label}>{hotspot.label}</span>
     </button>
   );
-}
+});

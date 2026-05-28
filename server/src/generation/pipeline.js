@@ -6,8 +6,6 @@
 //     against existing hotspots, then runs full plan+image for the child node,
 //     and appends a hotspot to the parent.
 import { nanoid } from 'nanoid';
-import fs from 'node:fs';
-import { join as path_join } from 'node:path';
 import { config } from '../config.js';
 import { hashNode } from '../lib/hash.js';
 import {
@@ -75,25 +73,14 @@ function decideCall(args) {
 }
 
 async function decideAndSearch({ canvas, jobId, topic, path, currentLabel, depth, intent }) {
-  const dbg = (entry) => {
-    try {
-      const line = JSON.stringify({ ts: new Date().toISOString(), canvasId: canvas.id, jobId, topic, currentLabel, intent, depth, ...entry }) + '\n';
-      fs.appendFile(path_join(config.dataDir, 'search-debug.log'), line, () => {});
-    } catch {}
-  };
   let decision;
   try {
     decision = await decideCall({ topic, path, currentLabel, intent, depth });
-    dbg({ stage: 'decided', decision });
   } catch (e) {
     log.warn('decide-search failed:', e?.message);
-    dbg({ stage: 'decide_error', error: String(e?.message || e) });
     return [];
   }
-  if (!decision.should_search || decision.queries.length === 0) {
-    dbg({ stage: 'skipped', reason: !decision.should_search ? 'should_search=false' : 'no_queries' });
-    return [];
-  }
+  if (!decision.should_search || decision.queries.length === 0) return [];
 
   broadcast(canvas, {
     type: SseEvents.SEARCH_STARTED, canvasId: canvas.id, jobId,
@@ -102,10 +89,8 @@ async function decideAndSearch({ canvas, jobId, topic, path, currentLabel, depth
   let sources = [];
   try {
     sources = await searchWeb({ queries: decision.queries, perQueryMax: 5 });
-    dbg({ stage: 'searched', queries: decision.queries, sourceCount: sources.length, firstUrl: sources[0]?.url });
   } catch (e) {
     log.warn('searchWeb failed:', e?.message);
-    dbg({ stage: 'search_error', error: String(e?.message || e) });
   }
   broadcast(canvas, {
     type: SseEvents.SEARCH_DONE, canvasId: canvas.id, jobId,
