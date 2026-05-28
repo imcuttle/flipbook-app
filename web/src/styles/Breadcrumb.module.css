@@ -1,0 +1,40 @@
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+.chip {
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--muted);
+  border-radius: 999px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: var(--bg);
+}
+
+.current {
+  color: var(--ink);
+  font-weight: 600;
+  cursor: default;
+}
+
+.current:hover { background: transparent; }
+
+.sep {
+  color: #B4A793;
+  user-select: none;
+}

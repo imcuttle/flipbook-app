@@ -1,0 +1,28 @@
+:root {
+  --bg: #F5EFE6;
+  --paper: #FFFFFF;
+  --ink: #1F1F1F;
+  --muted: #6F6457;
+  --line: rgba(0, 0, 0, 0.08);
+  --pill: #FFFFFF;
+  --accent: #1F1F1F;
+  --topbar-bg: #FAF8F4;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Georgia', 'Iowan Old Style', 'Times New Roman', serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+}

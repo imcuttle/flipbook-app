@@ -1,0 +1,217 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--topbar-bg);
+}
+
+.topbar.compact {
+  padding: 6px 10px;
+  gap: 6px;
+}
+
+.dots {
+  display: flex;
+  gap: 6px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.dots span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #DCD3C4;
+}
+
+.iconBtn {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.iconBtn:hover { background: var(--bg); }
+
+.iconLabel { font-size: 14px; line-height: 1; }
+
+/* Address-bar capsule — same shape as Chrome's URL bar */
+.address {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #FFFFFF;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  min-width: 0;
+  min-height: 36px;
+  overflow: hidden;
+}
+
+.addressInput {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  padding: 6px 4px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.addressInput::placeholder { color: #B4A793; }
+
+.modeTag {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.submit {
+  border: 0;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.submit:disabled { opacity: 0.5; cursor: default; }
+
+/* Breadcrumb chain inside address bar */
+.breadcrumb {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.crumbWrap { display: inline-flex; align-items: center; min-width: 0; }
+
+.crumb {
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+.crumb:hover:not(.crumbCurrent) { background: var(--bg); color: var(--ink); }
+
+.crumbCurrent {
+  color: var(--ink);
+  font-weight: 600;
+  cursor: default;
+}
+
+.crumbSep {
+  color: #B4A793;
+  user-select: none;
+  padding: 0 2px;
+  font-size: 13px;
+}
+
+.newCrumbBtn {
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.newCrumbBtn:hover { color: var(--ink); border-style: solid; }
+
+.inlineInput {
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 6px;
+  margin-left: 4px;
+  min-width: 80px;
+  flex: 0 1 200px;
+  color: var(--ink);
+  border-bottom: 1px dotted var(--muted);
+}
+
+/* Right-side mini button cluster */
+.rightCluster {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.miniBtn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  color: var(--ink);
+}
+
+.miniBtn:hover { background: var(--bg); }
+
+.compact .miniBtn { width: 28px; height: 28px; font-size: 13px; }
+
+/* Mobile */
+@media (max-width: 720px) {
+  .topbar { padding: 6px 8px; gap: 4px; }
+  .dots { display: none; }
+  .btnText { display: none; }
+  .iconBtn { padding: 6px 10px; }
+  .address { padding: 2px 8px; min-height: 32px; }
+  .addressInput { padding: 4px 2px; font-size: 13px; }
+  .modeTag { display: none; }
+  .submit { padding: 4px 10px; font-size: 12px; }
+  .crumb { font-size: 12px; max-width: 120px; padding: 3px 6px; }
+  .crumbSep { font-size: 12px; }
+  .newCrumbBtn { font-size: 10px; padding: 2px 6px; margin-left: 4px; }
+  .miniBtn { width: 28px; height: 28px; font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .crumb { max-width: 80px; }
+}

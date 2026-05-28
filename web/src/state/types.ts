@@ -1,0 +1,128 @@
+// Mirrors the server's node JSON schema.
+export type Hotspot = {
+  label: string;
+  anchor_xy: [number, number];
+  leader_xy: [number, number];
+  next_prompt?: string;
+  next_hash?: string | null;
+};
+
+export type SourceRef = {
+  title: string;
+  url: string;
+  snippet?: string | null;
+  source?: string | null; // hostname / publisher
+};
+
+export type Node = {
+  hash: string;
+  depth: number;
+  parent: string | null;
+  title: string;
+  caption: string;
+  image: string;          // relative path (e.g. "images/<hash>.png")
+  image_prompt: string;
+  hotspots: Hotspot[];
+  sources?: SourceRef[];
+  path: { hash: string; title: string }[];
+  generated_at: string;
+  style_tag: string;
+};export type Tree = {
+  topic: string;
+  topic_slug: string;
+  root: string | null;
+  branches: number;
+  style: string;
+  nodes: Record<string, { title: string; depth: number; parent: string | null; children: string[] }>;
+};
+
+// SSE event payloads
+export type SseEvent =
+  | { type: 'planning_started'; canvasId: string; jobId: string; parentHash: string | null; hotspotIndex: number | null; label: string | null; clickXY?: [number, number] }
+  | { type: 'search_started'; canvasId: string; jobId: string; queries: string[] }
+  | { type: 'search_done'; canvasId: string; jobId: string; queries: string[]; sourceCount: number }
+  | { type: 'planner_done'; canvasId: string; jobId: string; hash: string; node: Omit<Node, 'image' | 'generated_at'> }
+  | { type: 'image_started'; canvasId: string; jobId: string; hash: string }
+  | { type: 'image_ready'; canvasId: string; jobId: string; hash: string; imageUrl: string; fallback: boolean }
+  | { type: 'node_ready'; canvasId: string; jobId: string; hash: string; node: Node }
+  | { type: 'tree_updated'; canvasId: string; jobId: string; treeNodeCount: number }
+  | { type: 'error'; canvasId: string; jobId: string; phase: 'plan' | 'image' | 'register'; message: string; recoverable: boolean }
+  | { type: 'done'; canvasId: string; jobId: string; hash: string; cacheHit: boolean };
+
+// UI-only types
+export type GenStatus =
+  | { phase: 'idle' }
+  | { phase: 'planning'; jobId?: string }
+  | { phase: 'image_loading'; jobId?: string; hash: string }
+  | { phase: 'ready' };
+
+export type Toast = { id: number; level: 'info' | 'warn' | 'error'; message: string };
+
+export type GalleryEntry = {
+  canvasId: string;
+  topic: string;
+  slug: string;
+  branches: number;
+  created_at: string;
+  last_run_at: string;
+  rootHash: string | null;
+  coverImage: string | null; // server-relative URL or null
+  nodeCount: number;
+};
+
+export type View = 'gallery' | 'canvas';
+
+// Per-click in-flight progress entry. Keyed by jobId. Position is in [0..1] and
+// is set when the user issues the click; the SSE pipeline updates `phase` as
+// it advances, then drops the entry on `done`.
+export type PendingClick = {
+  jobId: string;
+  parentHash: string;
+  clickXY: [number, number];
+  phase: 'planning' | 'image_loading' | 'finalizing';
+  startedAt: number;
+};
+
+export type AppState = {
+  view: View;
+  canvasId: string | null;
+  topic: string | null;
+  rootHash: string | null;
+  currentHash: string | null;
+  nodes: Record<string, Node>;
+  tree: Tree | null;
+  status: GenStatus;
+  toasts: Toast[];
+
+  // v2 additions
+  readOnly: boolean;                       // share-link preview mode
+  shareToken: string | null;
+  pendingClicks: Record<string, PendingClick>; // by jobId
+  pendingByParent: Record<string, string[]>;   // parentHash -> [jobId, ...]
+  fullscreen: boolean;
+  showChrome: boolean;                     // breadcrumb / caption / hint visibility in fullscreen
+  showLabels: boolean;                     // hotspot card overlay visibility
+  // Last click position on the *parent* node, used as the zoom-in origin for
+  // the next child's enter animation. Cleared after the animation triggers.
+  lastDrillFrom: { parentHash: string; xy: [number, number] } | null;
+};
+
+export const initialState: AppState = {
+  view: 'gallery',
+  canvasId: null,
+  topic: null,
+  rootHash: null,
+  currentHash: null,
+  nodes: {},
+  tree: null,
+  status: { phase: 'idle' },
+  toasts: [],
+  readOnly: false,
+  shareToken: null,
+  pendingClicks: {},
+  pendingByParent: {},
+  fullscreen: false,
+  showChrome: true,
+  showLabels: true,
+  lastDrillFrom: null,
+};

@@ -1,0 +1,22 @@
+{
+  "name": "@flipbook/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "nanoid": "^5.0.7",
+    "sequelize": "^6.37.8",
+    "sqlite3": "^6.0.1"
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  }
+}

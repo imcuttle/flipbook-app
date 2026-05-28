@@ -1,0 +1,48 @@
+.indicator {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  /* Pop-in when the press starts. */
+  animation: pop 120ms ease-out;
+}
+
+@keyframes pop {
+  from { transform: translate(-50%, -50%) scale(0.6); opacity: 0.4; }
+  to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.ring {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.18));
+}
+
+.bgTrack {
+  fill: rgba(255, 255, 255, 0.7);
+  stroke: rgba(31, 31, 31, 0.22);
+  stroke-width: 2;
+}
+
+.progress {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  /* Circumference of r=10 (in viewBox units) is 2π·10 ≈ 62.83.
+     We declare it here so the JS-side keyframe can animate dashoffset against
+     a known starting dasharray. */
+  stroke-dasharray: 62.83;
+}
+
+.dot {
+  fill: var(--ink);
+  opacity: 0.85;
+}
+
+@media (max-width: 720px) {
+  .indicator { width: 22px; height: 22px; }
+}

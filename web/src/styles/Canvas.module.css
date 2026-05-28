@@ -1,0 +1,216 @@
+/* Wrapper that consumes available height in fullscreen mode and centres the
+   stage. In normal mode it just lets the stage take full width. The wrapper
+   provides a *bounded* box (both width and height in fullscreen, only width
+   in normal mode) that the stage fits into via aspect-ratio. */
+.stageWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  /* Critical: the stage uses aspect-ratio with both max-width:100% and
+     max-height:100%; for that browsers need the wrapper to NOT stretch the
+     stage. align/justify center already prevents stretching. */
+}
+
+.stage {
+  position: relative;
+  /* Take the smaller of (wrapper width, wrapper height × 16/9) — done by
+     declaring both dimension caps and letting aspect-ratio mediate. */
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  max-height: 100%;
+  /* Without min-width:0, flex children sometimes refuse to shrink below
+     content size. */
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* Scene transitions — driven by `key={node.hash}` on the stage so each new
+   node is a fresh DOM element with the entrance animation re-applied. */
+.stage.enterDrill {
+  animation: drillIn 480ms cubic-bezier(0.22, 0.8, 0.32, 1) both;
+}
+
+.stage.enterUp {
+  animation: drillOut 380ms cubic-bezier(0.22, 0.8, 0.32, 1) both;
+}
+
+.stage.enterFade {
+  animation: fadeIn 260ms ease-out both;
+}
+
+@keyframes drillIn {
+  /* Zoom into the click point: start as a small bright pinhole at (originX,originY),
+     expand to fill the whole stage. transform-origin is set inline. */
+  0% {
+    opacity: 0;
+    transform: scale(0.04);
+    filter: blur(6px) brightness(1.15);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0) brightness(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+  }
+}
+
+@keyframes drillOut {
+  /* Coming back up the breadcrumb: subtle pull-out. */
+  0% { opacity: 0; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.stageClickable { cursor: crosshair; }
+.stageBusy      { cursor: wait; }
+.stageReadOnly  { cursor: default; }
+
+.image, .imageSvg {
+  width: 100%;
+  height: 100%;
+  /* contain: never crop the diagram — even if the stage's aspect ratio drifts
+     from the actual image's, we want the user to see all the in-image text
+     annotations. The stage already enforces 16:9 so contain == cover for the
+     usual case. */
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.shimmer {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(110deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 70%),
+    var(--bg);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.leaderSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.leaderSvg line { stroke: var(--accent); stroke-width: 0.2; opacity: 0.7; }
+.leaderSvg circle { fill: var(--accent); }
+
+.hotspots { position: absolute; inset: 0; pointer-events: none; }
+
+.title {
+  text-align: center;
+  margin: 8px 0 4px;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.caption {
+  text-align: center;
+  color: var(--muted);
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 920px;
+  align-self: center;
+}
+
+.hint {
+  text-align: center;
+  color: #B4A793;
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+/* In-flight click bubble: shows where the user clicked + which stage of generation */
+.pendingClick {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.pendingDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(31, 31, 31, 0.85);
+  box-shadow: 0 0 0 6px rgba(31, 31, 31, 0.18);
+  animation: pulse 1.6s ease-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(31,31,31,0.4); }
+  100% { box-shadow: 0 0 0 16px rgba(31,31,31,0); }
+}
+
+.pendingLabel {
+  background: rgba(31, 31, 31, 0.88);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pendingLabel span:first-child { font-weight: 600; }
+.pendingLabel span:last-child  { opacity: 0.7; font-size: 10px; }
+
+.capacityBadge,
+.readOnlyBadge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(31, 31, 31, 0.9);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  z-index: 6;
+}
+
+.readOnlyBadge {
+  background: rgba(0, 102, 204, 0.9);
+}
+
+/* Mobile-friendly tweaks */
+@media (max-width: 720px) {
+  .title { font-size: 18px; margin: 6px 0 2px; }
+  .caption { font-size: 13px; line-height: 1.45; padding: 0 4px; }
+  .pendingLabel span:first-child { display: none; }  /* keep just CN line */
+  .pendingLabel { font-size: 10px; padding: 3px 8px; }
+}
