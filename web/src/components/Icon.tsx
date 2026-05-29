@@ -11,6 +11,7 @@ import {
   Minimize,        // ⤢ exit fullscreen
   Eye,             // 👁 chrome on / preview badge
   EyeOff,          // 🚫 chrome off
+  Lock,            // 🔒 read-only / preview marker (distinct from Eye)
   X as XIcon,      // ✕ close / delete
   BookOpen,        // 📚 sources
   ListTree,        // 🌳 catalog / tree
@@ -31,6 +32,7 @@ const REGISTRY = {
   'fullscreen-exit': Minimize,
   eye: Eye,
   'eye-off': EyeOff,
+  lock: Lock,
   close: XIcon,
   sources: BookOpen,
   catalog: ListTree,

@@ -170,8 +170,12 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
+    // showChrome and fullscreen change the stage's height (the title /
+    // caption / hint elements above and below the stageWrap appear or
+    // disappear), so we MUST re-measure the imageRect when they flip —
+    // otherwise badges/TextLayer stay glued to the OLD stage and drift.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node?.hash, node?.image_w, node?.image_h, hasImage, isSvg]);
+  }, [node?.hash, node?.image_w, node?.image_h, hasImage, isSvg, showChrome, fullscreen]);
 
   // Convert stage-relative xy (0..1 of stage box) → image-relative xy
   // (0..1 of painted image). Inverse of imageToStage.
@@ -235,8 +239,10 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
+    // Re-measure when the stage's vertical extent changes (chrome / fullscreen
+    // toggles add or remove the title / caption / hint blocks above/below).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node?.hash, layouts.length, JSON.stringify(layouts.map((l) => [l.idx, l.anchor[0], l.anchor[1]]))]);
+  }, [node?.hash, layouts.length, JSON.stringify(layouts.map((l) => [l.idx, l.anchor[0], l.anchor[1]])), showChrome, fullscreen]);
 
   // Compute where the leader line should touch the card box: project the
   // leader endpoint onto the card edge nearest to it (so the line never
@@ -391,7 +397,8 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
         {/* Read-only badge — anchored to the actual painted image's top-right
             corner (not the stage's), so in fullscreen / pillar-boxed layouts
             it stays glued to the picture instead of floating in the empty
-            letterbox strip. Falls back to stage corner pre-measure. */}
+            letterbox strip. Falls back to stage corner pre-measure. Uses a
+            lock icon to distinguish it from the eye-shaped chrome toggle. */}
         {readOnly && (
           <div
             className={styles.readOnlyBadge}
@@ -404,7 +411,7 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
             title={t('canvas.preview.badge', lang)}
             aria-label={t('canvas.preview.badge', lang)}
           >
-            <Icon name="eye" size={14} />
+            <Icon name="lock" size={14} />
           </div>
         )}
       </div>
