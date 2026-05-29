@@ -125,6 +125,11 @@ function imageUrlFor(canvasId, hash, ext) {
 // --------- Core: build a new node (planner + image) ---------
 async function buildAndRegisterNode({
   canvas, parentNode, jobId, currentLabel, hashSeed, webSearchEnabled,
+  // Optional user-attached source image to seed THIS node's planner +
+  // ImageGen pass. When provided, the planner is asked to preserve
+  // composition/subject and only restyle, and the image provider is
+  // asked to image-to-image edit instead of generate from scratch.
+  seedImagePath = null,
 }) {
   const depth = parentNode ? (parentNode.depth ?? 0) + 1 : 0;
 
@@ -148,6 +153,7 @@ async function buildAndRegisterNode({
       depth,
       maxDepth: 99,
       sources,
+      seedImagePath,
     });
   } catch (e) {
     broadcast(canvas, {
@@ -179,12 +185,9 @@ async function buildAndRegisterNode({
     sources: sources.map((s) => ({
       title: s.title, url: s.url, snippet: s.snippet, source: s.source,
     })),
-    // Record whether web search was enabled when this node was generated.
-    // The UI uses this on navigation to default the search-toggle to the
-    // value the user picked when this node was made (so a tree branch
-    // generated with search-off doesn't silently turn search back on when
-    // the user revisits and clicks deeper).
     web_search_used: webSearchEnabled !== false,
+    // Persist the upload path so future debugging / re-renders can find it.
+    ...(seedImagePath ? { seed_image: seedImagePath } : {}),
     path,
     style_tag: 'isometric-illustration',
   };
@@ -196,6 +199,7 @@ async function buildAndRegisterNode({
     imageOutcome = await generateImage({
       canvasId: canvas.id, hash,
       title: plannerJson.title, imagePrompt: plannerJson.image_prompt,
+      seedImagePath,
     });
   } catch (e) {
     broadcast(canvas, {
@@ -277,6 +281,7 @@ export async function generateRootNode(canvas, args = {}) {
     canvas, parentNode: null, jobId,
     currentLabel: '', hashSeed: canvas.topic,
     webSearchEnabled: args.webSearchEnabled,
+    seedImagePath: args.seedImagePath ?? null,
   });
   broadcast(canvas, {
     type: SseEvents.DONE, canvasId: canvas.id, jobId, hash: node.hash, cacheHit,
@@ -287,7 +292,7 @@ export async function generateRootNode(canvas, args = {}) {
 // --------- Public: click → label → child node + parent hotspot append ---------
 export async function expandFromClick(canvas, args = {}) {
   const jobId = args.jobId || nanoid(8);
-  const { parentNode, clickXY, webSearchEnabled } = args;
+  const { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel } = args;
   if (!parentNode || !Array.isArray(clickXY)) throw new Error('parentNode and clickXY required');
 
   // Spatial dedup: if there's already a hotspot near this click, jump to its child.
@@ -309,19 +314,32 @@ export async function expandFromClick(canvas, args = {}) {
     return cached;
   }
 
-  // 1) Label inference
+  // 1) Label inference (skipped when the user supplied an explicit label
+  //    — they've already told us what they want).
   broadcast(canvas, {
     type: SseEvents.PLANNING_STARTED, canvasId: canvas.id, jobId,
     parentHash: parentNode.hash, hotspotIndex: null, label: null,
     clickXY,
   });
 
-  const labelOut = await clickLabelCall({
-    parentNode, clickXY,
-    existingLabels: parentNode.hotspots ?? [],
-    canvasId: canvas.id,
-    jobId,
-  });
+  let labelOut;
+  if (userLabel && userLabel.trim()) {
+    // User-supplied label — synthesize the hotspot record without an LLM call.
+    const trimmed = userLabel.trim().slice(0, 80);
+    labelOut = {
+      label: trimmed,
+      anchor_xy: [clickXY[0] + 0.08, clickXY[1] + 0.06],
+      leader_xy: clickXY,
+      next_prompt: trimmed,
+    };
+  } else {
+    labelOut = await clickLabelCall({
+      parentNode, clickXY,
+      existingLabels: parentNode.hotspots ?? [],
+      canvasId: canvas.id,
+      jobId,
+    });
+  }
 
   // Low-confidence rejection: the LLM didn't see anything drillable under
   // the click. Tell the frontend to clear the pending bubble + toast the
@@ -385,6 +403,7 @@ export async function expandFromClick(canvas, args = {}) {
     currentLabel: labelOut.label,
     hashSeed: labelOut.label,
     webSearchEnabled,
+    seedImagePath,
   });
 
   // 4) Link child on parent's hotspot — re-read inside the lock to avoid
@@ -425,7 +444,8 @@ export async function expandFromClick(canvas, args = {}) {
 export function enqueueRootGeneration(canvas, opts = {}) {
   const jobId = nanoid(8);
   const webSearchEnabled = opts.webSearchEnabled !== false; // default on
-  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled }).catch((e) => {
+  const seedImagePath = opts.seedImagePath ?? null;
+  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled, seedImagePath }).catch((e) => {
     log.error('generateRootNode failed:', e?.stack || e);
   }));
   return jobId;
@@ -434,13 +454,16 @@ export function enqueueRootGeneration(canvas, opts = {}) {
 // Click expansions: capped at MAX_PARALLEL_CLICKS_PER_NODE per (canvas, parent).
 // Different parents and different canvases run in parallel. Excess clicks are
 // queued in arrival order until a slot frees up.
-export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEnabled }) {
+export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel }) {
   const jobId = nanoid(8);
   const key = clickKey(canvas.id, parentNode.hash);
   const enabled = webSearchEnabled !== false; // default on
   // Fire-and-forget; progress is reported via SSE.
   clickSem.run(key, () => expandFromClick(canvas, {
-    parentNode, clickXY, jobId, webSearchEnabled: enabled,
+    parentNode, clickXY, jobId,
+    webSearchEnabled: enabled,
+    seedImagePath: seedImagePath ?? null,
+    userLabel: userLabel ?? null,
   }))
     .catch((e) => log.error('expandFromClick failed:', e?.stack || e));
   // Surface queue stats so the route can echo them back to the client.

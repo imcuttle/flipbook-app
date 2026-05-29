@@ -94,6 +94,11 @@ export const messages: Catalogue = {
   'topbar.web.on': { zh: '联网搜索已开启 (点击关闭)', en: 'Web search ON (click to disable)' },
   'topbar.web.off': { zh: '联网搜索已关闭 (点击开启)', en: 'Web search OFF (click to enable)' },
   'topbar.lang.zh': { zh: '切换到 English', en: 'Switch to 中文' },
+  'topbar.attach': { zh: '附加图片(粘贴或选择)', en: 'Attach image (paste or pick)' },
+  'topbar.attach.remove': { zh: '移除图片', en: 'Remove image' },
+  'topbar.compose-on-click.on': { zh: '点击后弹出输入框 (开)', en: 'Compose-on-click (on)' },
+  'topbar.compose-on-click.off': { zh: '点击直接生成 (关)', en: 'Generate immediately (off)' },
+  'topbar.more': { zh: '更多', en: 'More' },
 
   // Canvas
   'canvas.loading': { zh: '正在生成…', en: 'Generating canvas…' },
@@ -111,6 +116,11 @@ export const messages: Catalogue = {
 
   // Hotspot card
   'hotspot.delete.tip': { zh: '删除该分支', en: 'Delete this branch' },
+
+  // Click composer panel
+  'composer.placeholder': { zh: '可选:输入主题或粘贴图片', en: 'Optional: type a topic or paste an image' },
+  'composer.submit': { zh: '生成 (回车)', en: 'Generate (Enter)' },
+  'composer.cancel': { zh: '取消 (Esc)', en: 'Cancel (Esc)' },
 
   // Confirm modal — node delete
   'confirm.delete.title': { zh: '确认删除该分支?', en: 'Delete this branch?' },

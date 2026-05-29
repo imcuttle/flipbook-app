@@ -32,6 +32,13 @@ type Props = {
   onHotspotClick: (index: number) => void;
   onHotspotDelete?: (index: number) => void;
   onJumpToHash?: (hash: string) => void;
+  // Optional inline overlay rendered on top of the stage (e.g. floating
+  // click composer panel). Rendered inside the stage so its absolute
+  // positioning is relative to the stage rect.
+  overlay?: React.ReactNode;
+  // Lets the App convert image-relative xy → stage-relative xy via the
+  // imageRect this component computes. Called whenever imageRect changes.
+  onImageRectChange?: (rect: { left: number; top: number; width: number; height: number } | null) => void;
 };
 
 const PHASE_KEY: Record<PendingClick['phase'], 'phase.planning' | 'phase.image' | 'phase.finalizing'> = {
@@ -40,7 +47,7 @@ const PHASE_KEY: Record<PendingClick['phase'], 'phase.planning' | 'phase.image' 
   finalizing: 'phase.finalizing',
 };
 
-export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, readOnly, showChrome, showLabels, fullscreen, enterMode = 'none', originXY, onImageClick, onHotspotClick, onHotspotDelete, onJumpToHash }: Props) {
+export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, readOnly, showChrome, showLabels, fullscreen, enterMode = 'none', originXY, onImageClick, onHotspotClick, onHotspotDelete, onJumpToHash, overlay, onImageRectChange }: Props) {
   const [lang] = useLang();
   const hasImage = !!node?.image;
   const src = node?.image ? imageUrl(canvasId, node.image) : '';
@@ -176,6 +183,12 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
     // otherwise badges/TextLayer stay glued to the OLD stage and drift.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.hash, node?.image_w, node?.image_h, hasImage, isSvg, showChrome, fullscreen]);
+
+  // Forward imageRect to the parent (so the floating click composer can
+  // convert image-relative xy → stage-relative position itself).
+  useEffect(() => {
+    if (onImageRectChange) onImageRectChange(imageRect);
+  }, [imageRect, onImageRectChange]);
 
   // Convert stage-relative xy (0..1 of stage box) → image-relative xy
   // (0..1 of painted image). Inverse of imageToStage.
@@ -363,6 +376,10 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
              pressXY is image-relative; place it in stage space so the ring
              tracks the actual cursor even when the image is letterboxed. */}
         {pressXY && <LongPressIndicator xy={imageToStage(pressXY)} durationMs={LONG_PRESS_MS} />}
+
+        {/* Custom overlay (e.g. floating click composer panel) — rendered
+            above all canvas content so it's interactable. */}
+        {overlay}
 
         {/* Pending click progress bubbles. clickXY is image-relative; convert
             to stage space for absolute positioning. */}

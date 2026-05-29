@@ -8,9 +8,11 @@ import { Canvas } from './components/Canvas';
 import { ToastStack } from './components/Toast';
 import { Gallery } from './components/Gallery';
 import { ConfirmModal } from './components/ConfirmModal';
+import { ClickComposer } from './components/ClickComposer';
 import { useCanvasSSE } from './hooks/useCanvasSSE';
 import { createCanvas, clickAt, getNode, getTree, createShareLink, resolveShareLink, deleteNode } from './lib/api';
 import { useLang, t } from './lib/i18n';
+import { revokeSelection, type ImageSelection } from './lib/imageUpload';
 
 function readUrlState() {
   const url = new URL(window.location.href);
@@ -43,6 +45,18 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [draftTopic, setDraftTopic] = useState('');
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
+  // Image attached to the gallery topic input (used for image-seeded
+  // canvas creation). Cleared on successful submit or via the X button.
+  const [topicAttachment, setTopicAttachment] = useState<ImageSelection | null>(null);
+  // Whether long-press should open the floating compose panel (default ON)
+  // or fire generate immediately (legacy behaviour).
+  const [composeOnClick, setComposeOnClick] = useState(true);
+  // Pending click-composer state. When non-null the floating panel is open
+  // anchored at this image-relative xy, capturing label + image attachment.
+  const [clickComposer, setClickComposer] = useState<{ xy: [number, number] } | null>(null);
+  // Latest imageRect reported by the Canvas (in % of stage). Lets us
+  // convert image-relative xy into stage-relative xy for the composer.
+  const [canvasImageRect, setCanvasImageRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const [lang] = useLang();
   // True once boot URL has been parsed and any hydrate dispatched; before this
   // we MUST NOT write to the URL or we'll erase the params we're about to read.
@@ -203,21 +217,33 @@ export default function App() {
 
   const onSubmitTopic = useCallback(async () => {
     const topic = draftTopic.trim();
-    if (!topic || state.readOnly) return;
+    // Either a topic, an attached image, or both — server will accept any.
+    if (!topic && !topicAttachment) return;
+    if (state.readOnly) return;
     try {
-      const { canvasId } = await createCanvas(topic, { webSearch: state.webSearch });
-      dispatch({ type: 'canvas_created', canvasId, topic });
+      const { canvasId } = await createCanvas(topic, {
+        webSearch: state.webSearch,
+        image: topicAttachment?.file ?? null,
+      });
+      dispatch({ type: 'canvas_created', canvasId, topic: topic || topicAttachment?.file?.name?.replace(/\.[^.]+$/, '') || 'Untitled' });
       setDraftTopic('');
+      revokeSelection(topicAttachment);
+      setTopicAttachment(null);
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Create failed: ${(e as Error).message}` } });
     }
-  }, [draftTopic, state.readOnly, state.webSearch]);
+  }, [draftTopic, state.readOnly, state.webSearch, topicAttachment]);
 
   const onImageClick = useCallback(async (xy: [number, number]) => {
     if (state.readOnly) return;
     if (!state.canvasId || !state.currentHash) return;
-    // Cap is enforced server-side; UI prevents new clicks at capacity, but
-    // race-safe behaviour: if server rejects we still gracefully toast.
+    // Compose-on-click ON: open the floating panel and let the user add
+    // an optional label / image attachment before submitting.
+    // Compose-on-click OFF: legacy behaviour — fire the click immediately.
+    if (composeOnClick) {
+      setClickComposer({ xy });
+      return;
+    }
     try {
       const r = await clickAt(state.canvasId, state.currentHash, xy[0], xy[1], { webSearch: state.webSearch });
       dispatch({
@@ -229,7 +255,37 @@ export default function App() {
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Click failed: ${(e as Error).message}` } });
     }
+  }, [state.canvasId, state.currentHash, state.readOnly, state.webSearch, composeOnClick]);
+
+  // Submit handler for the floating click composer panel.
+  const submitClickComposer = useCallback(async (
+    xy: [number, number],
+    label: string,
+    image: ImageSelection | null,
+  ) => {
+    if (state.readOnly || !state.canvasId || !state.currentHash) return;
+    try {
+      const r = await clickAt(state.canvasId, state.currentHash, xy[0], xy[1], {
+        webSearch: state.webSearch,
+        label: label || null,
+        image: image?.file ?? null,
+      });
+      dispatch({
+        type: 'click_pending_local',
+        jobId: r.jobId,
+        parentHash: state.currentHash,
+        clickXY: xy,
+      });
+      revokeSelection(image);
+      setClickComposer(null);
+    } catch (e) {
+      dispatch({ type: 'add_toast', toast: { level: 'error', message: `Click failed: ${(e as Error).message}` } });
+    }
   }, [state.canvasId, state.currentHash, state.readOnly, state.webSearch]);
+
+  const cancelClickComposer = useCallback(() => {
+    setClickComposer(null);
+  }, []);
 
   const onHotspotClick = useCallback((index: number) => {
     if (!state.currentHash || !state.canvasId) return;
@@ -463,10 +519,18 @@ export default function App() {
           onToggleChrome={onToggleChrome}
           onToggleLabels={onToggleLabels}
           onToggleWebSearch={onToggleWebSearch}
+          onToggleComposeOnClick={() => setComposeOnClick((v) => !v)}
+          attachment={topicAttachment}
+          onAttachmentChange={(sel) => {
+            // Revoke the previous preview URL when replacing.
+            if (topicAttachment && topicAttachment !== sel) revokeSelection(topicAttachment);
+            setTopicAttachment(sel);
+          }}
           fullscreen={state.fullscreen}
           showChrome={state.showChrome}
           showLabels={state.showLabels}
           webSearch={state.webSearch}
+          composeOnClick={composeOnClick}
           readOnly={state.readOnly}
           busy={busy}
         />
@@ -499,6 +563,21 @@ export default function App() {
               onHotspotClick={onHotspotClick}
               onHotspotDelete={onHotspotDelete}
               onJumpToHash={onJumpBreadcrumb}
+              onImageRectChange={setCanvasImageRect}
+              overlay={clickComposer && (() => {
+                // image-relative xy → stage-relative for placement.
+                const ir = canvasImageRect ?? { left: 0, top: 0, width: 100, height: 100 };
+                const sx = (ir.left + clickComposer.xy[0] * ir.width) / 100;
+                const sy = (ir.top + clickComposer.xy[1] * ir.height) / 100;
+                return (
+                  <ClickComposer
+                    xy={clickComposer.xy}
+                    stageXY={[sx, sy]}
+                    onSubmit={(label, image) => submitClickComposer(clickComposer.xy, label, image)}
+                    onCancel={cancelClickComposer}
+                  />
+                );
+              })()}
             />
           )}
         </div>

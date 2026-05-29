@@ -11,6 +11,10 @@ export const paths = {
   nodePath: (id, hash) => path.join(paths.nodeDir(id), `${hash}.json`),
   imageDir: (id) => path.join(paths.canvasDir(id), 'images'),
   imagePath: (id, hash, ext = 'png') => path.join(paths.imageDir(id), `${hash}.${ext}`),
+  // User-uploaded source images attached to a node (canvas creation seed
+  // or per-click drilldown attachment). Filename: <jobId>.<ext>.
+  uploadDir: (id) => path.join(paths.canvasDir(id), 'uploads'),
+  uploadPath: (id, basename) => path.join(paths.uploadDir(id), basename),
 };
 
 // Validators (used by routes to prevent path traversal)

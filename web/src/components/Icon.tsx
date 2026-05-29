@@ -18,6 +18,10 @@ import {
   ChevronRight,    // › breadcrumb separator
   Diamond,         // ◆ current-row marker
   Loader2,         // generic spinner
+  Paperclip,       // 📎 attach image
+  MoreHorizontal,  // ⋯ more / overflow menu
+  CornerDownLeft,  // ⏎ submit / enter
+  ImagePlus,       // image-with-plus alt for click composer
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -39,6 +43,10 @@ const REGISTRY = {
   chevron: ChevronRight,
   current: Diamond,
   spinner: Loader2,
+  attach: Paperclip,
+  more: MoreHorizontal,
+  submit: CornerDownLeft,
+  'image-plus': ImagePlus,
 } as const;
 
 export type IconName = keyof typeof REGISTRY;

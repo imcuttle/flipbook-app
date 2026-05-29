@@ -1,0 +1,100 @@
+/* Floating click-composer panel anchored at the click point on the image
+   stage. Absolute-positioned with stage-relative left/top. */
+.panel {
+  position: absolute;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 6px 4px 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  font: inherit;
+  max-width: min(440px, 80%);
+  min-width: 240px;
+  /* Make sure pointer events on the panel never propagate to the stage's
+     long-press handler — handled via JSX stopPropagation, this is belt-and-
+     suspenders so hover doesn't restart the timer. */
+  pointer-events: auto;
+}
+
+.input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 2px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.input::placeholder { color: #B4A793; }
+
+.thumbWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.thumbRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #C44;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbRemove:hover { background: #A33; }
+
+.iconBtn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.iconBtn:hover { background: var(--bg); color: var(--ink); }
+
+.submitBtn {
+  border: 0;
+  background: var(--ink);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.submitBtn:hover { background: #000; }

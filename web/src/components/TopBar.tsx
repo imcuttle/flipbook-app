@@ -1,7 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import styles from '../styles/TopBar.module.css';
 import type { Node } from '../state/types';
 import { useLang, t } from '../lib/i18n';
 import { Icon } from './Icon';
+import { selectionFromClipboard, selectionFromFileList, type ImageSelection } from '../lib/imageUpload';
 
 type Props = {
   view: 'gallery' | 'canvas';
@@ -17,10 +19,15 @@ type Props = {
   onToggleChrome: () => void;
   onToggleLabels: () => void;
   onToggleWebSearch: () => void;
+  onToggleComposeOnClick: () => void;
+  // Attachment for new-canvas creation. Picked / pasted in the address bar.
+  attachment: ImageSelection | null;
+  onAttachmentChange: (sel: ImageSelection | null) => void;
   fullscreen: boolean;
   showChrome: boolean;
   showLabels: boolean;
   webSearch: boolean;
+  composeOnClick: boolean;
   readOnly: boolean;
   busy: boolean;
 };
@@ -29,18 +36,40 @@ export function TopBar(props: Props) {
   const {
     view, topic, currentNode, draftTopic, onDraftTopicChange, onSubmitTopic,
     onBackToGallery, onJumpBreadcrumb, onShare, onToggleFullscreen, onToggleChrome,
-    onToggleLabels, onToggleWebSearch,
-    fullscreen, showChrome, showLabels, webSearch, readOnly, busy,
+    onToggleLabels, onToggleWebSearch, onToggleComposeOnClick,
+    attachment, onAttachmentChange,
+    fullscreen, showChrome, showLabels, webSearch, composeOnClick, readOnly, busy,
   } = props;
 
   const [lang, setLang] = useLang();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (busy || readOnly) return;
-    if (view === 'gallery' && draftTopic.trim()) {
+    if (view === 'gallery' && (draftTopic.trim() || attachment)) {
       onSubmitTopic();
     }
+  };
+
+  // Paste-to-attach is scoped to the address input only (per the user's
+  // explicit constraint). We attach onPaste directly to the <input>, then
+  // walk the clipboard for image items.
+  const onInputPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const sel = selectionFromClipboard(e);
+    if (sel) {
+      e.preventDefault();
+      onAttachmentChange(sel);
+    }
+    // Otherwise let the browser do its default text paste.
+  };
+
+  const onFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sel = selectionFromFileList(e.target.files);
+    if (sel) onAttachmentChange(sel);
+    // Reset so the same file can be picked again after removal.
+    e.target.value = '';
   };
 
   const path = currentNode?.path ?? [];
@@ -68,11 +97,38 @@ export function TopBar(props: Props) {
           <>
             <span className={styles.modeTag}>{t('topbar.new', lang)}</span>
             <input
+              ref={inputRef}
               type="text"
               className={styles.addressInput}
               placeholder={t('topbar.placeholder', lang)}
               value={draftTopic}
               onChange={(e) => onDraftTopicChange(e.target.value)}
+              onPaste={onInputPaste}
+            />
+            {attachment && (
+              <span className={styles.attachThumbWrap} title={attachment.file.name || 'image'}>
+                <img src={attachment.previewUrl} alt="" className={styles.attachThumb} />
+                <button
+                  type="button"
+                  className={styles.attachThumbRemove}
+                  aria-label={t('topbar.attach.remove', lang)}
+                  onClick={(e) => { e.preventDefault(); onAttachmentChange(null); }}
+                ><Icon name="close" size={10} strokeWidth={2.5} /></button>
+              </span>
+            )}
+            <button
+              type="button"
+              className={styles.attachBtn}
+              title={t('topbar.attach', lang)}
+              aria-label={t('topbar.attach', lang)}
+              onClick={(e) => { e.preventDefault(); fileRef.current?.click(); }}
+            ><Icon name="attach" size={14} /></button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={onFilePicked}
             />
           </>
         )}
@@ -107,33 +163,15 @@ export function TopBar(props: Props) {
           <button
             className={styles.submit}
             type="submit"
-            disabled={!draftTopic.trim() || busy}
+            disabled={(!draftTopic.trim() && !attachment) || busy}
           >
             {busy ? '…' : t('topbar.generate', lang)}
           </button>
         )}
       </form>
 
-      {/* Right-side icon cluster — always mini */}
+      {/* Right-side icon cluster — primary actions inline, secondary in More dropdown */}
       <div className={styles.rightCluster}>
-        <button
-          type="button"
-          className={styles.miniBtn}
-          onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-          title={t('topbar.lang.zh', lang)}
-          aria-label="Switch language"
-        ><span className={styles.langText}>{lang === 'zh' ? 'EN' : '中'}</span></button>
-        {!readOnly && (
-          <button
-            type="button"
-            className={styles.miniBtn}
-            onClick={onToggleWebSearch}
-            title={webSearch ? t('topbar.web.on', lang) : t('topbar.web.off', lang)}
-            aria-label="Toggle web search"
-            aria-pressed={!webSearch}
-            style={!webSearch ? { opacity: 0.6 } : undefined}
-          ><Icon name={webSearch ? 'web-on' : 'web-off'} size={14} /></button>
-        )}
         {view === 'canvas' && !readOnly && (
           <button
             type="button"
@@ -142,17 +180,6 @@ export function TopBar(props: Props) {
             title={t('topbar.share', lang)}
             aria-label="Share"
           ><Icon name="share" size={14} /></button>
-        )}
-        {view === 'canvas' && (
-          <button
-            type="button"
-            className={styles.miniBtn}
-            onClick={onToggleLabels}
-            title={showLabels ? t('topbar.labels.hide', lang) : t('topbar.labels.show', lang)}
-            aria-label="Toggle labels"
-            aria-pressed={!showLabels}
-            style={!showLabels ? { opacity: 0.6 } : undefined}
-          ><Icon name={showLabels ? 'tag-on' : 'tag-off'} size={14} /></button>
         )}
         {view === 'canvas' && (
           <button
@@ -172,7 +199,120 @@ export function TopBar(props: Props) {
             aria-label="Toggle chrome"
           ><Icon name={showChrome ? 'eye' : 'eye-off'} size={14} /></button>
         )}
+        <MoreMenu
+          lang={lang}
+          setLang={setLang}
+          onToggleWebSearch={!readOnly ? onToggleWebSearch : undefined}
+          onToggleLabels={view === 'canvas' ? onToggleLabels : undefined}
+          onToggleComposeOnClick={view === 'canvas' && !readOnly ? onToggleComposeOnClick : undefined}
+          webSearch={webSearch}
+          showLabels={showLabels}
+          composeOnClick={composeOnClick}
+        />
       </div>
+    </div>
+  );
+}
+
+// More-menu — collapses lower-priority toggles into a kebab dropdown so
+// the right cluster stays compact as features accrue.
+type MoreMenuProps = {
+  lang: 'zh' | 'en';
+  setLang: (l: 'zh' | 'en') => void;
+  onToggleWebSearch?: () => void;
+  onToggleLabels?: () => void;
+  onToggleComposeOnClick?: () => void;
+  webSearch: boolean;
+  showLabels: boolean;
+  composeOnClick: boolean;
+};
+
+function MoreMenu({
+  lang, setLang,
+  onToggleWebSearch, onToggleLabels, onToggleComposeOnClick,
+  webSearch, showLabels, composeOnClick,
+}: MoreMenuProps) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      // Cast via the global DOM Node — the local `Node` import shadows it
+      // (we imported it from state/types for breadcrumb props).
+      if (!wrapRef.current?.contains(e.target as globalThis.Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className={styles.moreWrap}>
+      <button
+        type="button"
+        className={styles.miniBtn}
+        onClick={() => setOpen((v) => !v)}
+        title={t('topbar.more', lang)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t('topbar.more', lang)}
+      ><Icon name="more" size={14} /></button>
+      {open && (
+        <div className={styles.moreMenu} role="menu">
+          {onToggleComposeOnClick && (
+            <button
+              type="button"
+              className={styles.moreItem}
+              role="menuitemcheckbox"
+              aria-checked={composeOnClick}
+              onClick={() => { onToggleComposeOnClick(); setOpen(false); }}
+            >
+              <Icon name={composeOnClick ? 'image-plus' : 'submit'} size={14} />
+              <span>{composeOnClick
+                ? t('topbar.compose-on-click.on', lang)
+                : t('topbar.compose-on-click.off', lang)}</span>
+            </button>
+          )}
+          {onToggleWebSearch && (
+            <button
+              type="button"
+              className={styles.moreItem}
+              role="menuitemcheckbox"
+              aria-checked={webSearch}
+              onClick={() => { onToggleWebSearch(); setOpen(false); }}
+            >
+              <Icon name={webSearch ? 'web-on' : 'web-off'} size={14} />
+              <span>{webSearch ? t('topbar.web.on', lang) : t('topbar.web.off', lang)}</span>
+            </button>
+          )}
+          {onToggleLabels && (
+            <button
+              type="button"
+              className={styles.moreItem}
+              role="menuitemcheckbox"
+              aria-checked={showLabels}
+              onClick={() => { onToggleLabels(); setOpen(false); }}
+            >
+              <Icon name={showLabels ? 'tag-on' : 'tag-off'} size={14} />
+              <span>{showLabels ? t('topbar.labels.hide', lang) : t('topbar.labels.show', lang)}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.moreItem}
+            role="menuitem"
+            onClick={() => { setLang(lang === 'zh' ? 'en' : 'zh'); setOpen(false); }}
+          >
+            <span className={styles.langInline}>{lang === 'zh' ? 'EN' : '中'}</span>
+            <span>{t('topbar.lang.zh', lang)}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

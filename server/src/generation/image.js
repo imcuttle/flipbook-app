@@ -40,13 +40,21 @@ async function statBigEnough(p, minBytes = 512) {
  *   5. If every real provider fails, the always-on `svg` provider produces a
  *      placeholder. The pipeline never returns without a file.
  */
-export async function generateImage({ canvasId, hash, title, imagePrompt, onEvent }) {
+export async function generateImage({ canvasId, hash, title, imagePrompt, seedImagePath = null, onEvent }) {
   const targetPng = paths.imagePath(canvasId, hash, 'png');
   const dir = path.dirname(targetPng);
   await fs.mkdir(dir, { recursive: true });
 
   const suffix = await getStyleSuffix();
-  const finalPrompt = imagePrompt + suffix;
+  // When a seed image is attached, prepend an explicit instruction to do
+  // an image-to-image edit rather than text-to-image. Vision-capable
+  // models invoke their ImageEdit tool when they see the @-reference;
+  // other providers fall back to text-only generation but the seed-aware
+  // planner has already baked preservation requirements into imagePrompt.
+  const finalPrompt = (seedImagePath
+    ? `Image-to-image edit of @${seedImagePath} — preserve the source's subject, composition, and zone layout exactly; only restyle and add diagram annotations described below.\n\n`
+    : ''
+  ) + imagePrompt + suffix;
 
   const reasons = [];
   for (const provider of chain()) {
@@ -62,6 +70,7 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, onEven
         size: config.imageSize,
         title,
         hash,
+        seedImagePath,
         onEvent,
       });
     } catch (e) {

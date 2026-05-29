@@ -1,5 +1,5 @@
 // Planner: builds the prompt and calls codebuddyClient.callOnce, then validates.
-import { loadPrompts } from './prompts.js';
+import { loadPrompt, loadPrompts } from './prompts.js';
 import { callOnce } from '../codebuddyClient.js';
 import { PlannerError } from '../lib/errors.js';
 
@@ -16,8 +16,17 @@ export function validatePlannerOutput(raw) {
   };
 }
 
-export async function callPlanner({ topic, path = [], currentLabel = '', depth = 0, maxDepth = 99, sources = [] }) {
+export async function callPlanner({ topic, path = [], currentLabel = '', depth = 0, maxDepth = 99, sources = [], seedImagePath = null }) {
   const { system, planner } = await loadPrompts();
+  // When a seed image is attached, layer in the image-extend prompt
+  // addendum which forces preservation of the user's content/composition.
+  let plannerBody = planner;
+  if (seedImagePath) {
+    try {
+      const seedAddendum = await loadPrompt('planner-with-seed.md');
+      plannerBody = `${planner}\n\n${seedAddendum}`;
+    } catch { /* addendum file optional */ }
+  }
   const inputs = {
     topic,
     path: path.map((p) => ({ title: p.title })),
@@ -27,18 +36,26 @@ export async function callPlanner({ topic, path = [], currentLabel = '', depth =
     sources: sources.slice(0, 12).map((s) => ({
       title: s.title, url: s.url, snippet: s.snippet, source: s.source,
     })),
+    has_seed_image: !!seedImagePath,
   };
-  const prompt = [
-    system,
-    '',
-    planner,
-    '',
+  const parts = [system, '', plannerBody, ''];
+  if (seedImagePath) {
+    parts.push(
+      '## Seed image',
+      `@${seedImagePath}`,
+      '',
+      'A user-supplied source image is attached above. Treat it as the canonical visual content. Your job is to PRESERVE its subject, composition, and zone layout, only restyling to the encyclopedia look and adding 20–40 short text annotations OVER the existing scene.',
+      '',
+    );
+  }
+  parts.push(
     '## Inputs (JSON)',
     JSON.stringify(inputs, null, 2),
     '',
     '## Output',
     'Return JSON ONLY matching the schema above. No prose. No backticks.',
-  ].join('\n');
+  );
+  const prompt = parts.join('\n');
   const { parsed } = await callOnce({ prompt });
   return validatePlannerOutput(parsed);
 }

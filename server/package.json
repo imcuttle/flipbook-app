@@ -12,6 +12,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "multer": "^2.1.1",
     "nanoid": "^5.0.7",
     "sequelize": "^6.37.8",
     "sharp": "^0.34.5",

@@ -237,7 +237,114 @@
   line-height: 1;
 }
 
-.compact .langText { font-size: 10px; }
+/* Inline language label inside the More-menu (a textual "EN" / "中"). */
+.langInline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* Attached-image preview inside the address bar (gallery mode). */
+.attachThumbWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+.attachThumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.attachThumbRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #C44;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.attachThumbRemove:hover { background: #A33; }
+
+/* Paperclip in the address bar — same flat look as the input itself. */
+.attachBtn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.attachBtn:hover { background: var(--bg); color: var(--ink); }
+
+/* More-menu dropdown wrap — anchors the kebab + popover inside rightCluster. */
+.moreWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.moreMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 220px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 80;
+}
+
+.moreItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.moreItem:hover { background: var(--bg); }
+
+.moreItem svg { flex-shrink: 0; }
 
 /* Mobile */
 @media (max-width: 720px) {
