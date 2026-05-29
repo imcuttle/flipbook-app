@@ -99,26 +99,78 @@ function tryParseJson(stdout) {
     }
   } catch { /* not array/object — fall through */ }
 
-  // Step 2: if no `answer` extracted, treat full stdout as the answer.
-  const text = answer ?? stdout;
+  // Step 1b: if the top-level parse failed (e.g. stdout was truncated mid-
+  // stream because the child process was killed), salvage the model's reply
+  // by regex-extracting the last `"result":"<...>"` pair. Stdout is line-
+  // oriented JSON, so the regex looks for the final result entry's value
+  // and unescapes it as a JSON string literal.
+  if (answer === null) {
+    const m = stdout.match(/"type"\s*:\s*"result"\s*,[^]*?"result"\s*:\s*("(?:[^"\\]|\\.)*"|\{[\s\S]*\})/);
+    if (m) {
+      const candidate = m[1];
+      try {
+        const parsed = JSON.parse(candidate);
+        if (typeof parsed === 'string') answer = parsed;
+        else if (parsed && typeof parsed === 'object') return parsed;
+      } catch { /* fall through */ }
+    }
+  }
 
-  // Step 3a: strip surrounding code fences if any.
-  let stripped = text.trim();
-  // Match ```json ... ``` or ``` ... ``` anywhere if it brackets the whole text.
-  const fenced = stripped.match(/^```(?:json|JSON)?\s*\n?([\s\S]*?)\n?```\s*$/);
-  if (fenced) stripped = fenced[1].trim();
+  // Step 2: scan within the model's `answer` first (preferred), falling
+  // back to the raw stdout only if there's no answer (which means the
+  // top-level parse failed, e.g. truncated output). We DO NOT mix the two
+  // because the stdout's first parseable JSON is the message-array itself,
+  // which would shadow the planner output buried in result.result.
+  if (answer !== null) {
+    const fromAnswer = parseAnswerString(answer);
+    if (fromAnswer !== undefined) return fromAnswer;
+    throw new Error('could not parse JSON from codebuddy result text');
+  }
 
-  // Step 3b: direct parse.
-  try { return JSON.parse(stripped); } catch {}
-
-  // Step 3c: balanced-brace / bracket scan. Walk the string and return the
-  // FIRST complete top-level JSON object/array that parses cleanly. This
-  // tolerates leading prose, trailing prose, fenced code blocks mid-text, and
-  // stray braces inside string literals.
-  const scanned = extractFirstJson(stripped);
-  if (scanned !== undefined) return scanned;
-
+  // No `answer` — try a brace-scan across the raw stdout. This branch only
+  // helps when stdout itself is malformed JSON wrapping a coherent {...}
+  // block (rare, but cheap fallback).
+  const fromRaw = parseAnswerString(stdout);
+  if (fromRaw !== undefined) return fromRaw;
   throw new Error('could not parse JSON from codebuddy stdout');
+}
+
+// Try every reasonable shape for an LLM answer string:
+//   - bare JSON
+//   - JSON wrapped in ```json fences
+//   - JSON wrapped in <json_output>/<output> tags
+//   - JSON-encoded JSON (string whose value is itself JSON)
+//   - JSON object/array embedded in surrounding prose
+// Returns `undefined` when nothing parseable is found, so caller can throw
+// a specific error for the higher-level branch.
+function parseAnswerString(text) {
+  if (typeof text !== 'string') return undefined;
+  let stripped = text.trim();
+  if (!stripped) return undefined;
+
+  // Strip ```json ... ``` (anchored OR loose: surrounding prose is fine).
+  const fenced = stripped.match(/```(?:json|JSON)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenced) stripped = fenced[1].trim();
+  // Strip <json_output> / <output> wrapping tags some models emit.
+  const tagged = stripped.match(/<(?:json_output|json|output)>([\s\S]*?)<\/(?:json_output|json|output)>/i);
+  if (tagged) stripped = tagged[1].trim();
+
+  // Direct parse.
+  let direct;
+  try { direct = JSON.parse(stripped); } catch { /* fall through */ }
+  if (direct !== undefined) {
+    // If the parse yielded a string (i.e. JSON-encoded JSON), recurse once.
+    if (typeof direct === 'string') {
+      const inner = parseAnswerString(direct);
+      if (inner !== undefined) return inner;
+    }
+    return direct;
+  }
+
+  // Balanced-brace / bracket scan: return the first complete {…} or […]
+  // that parses, scanning the whole string. Tolerates prose, comments,
+  // stray braces in string values.
+  return extractFirstJson(stripped);
 }
 
 // Walk `s` and return the first balanced JSON value (object or array) that
@@ -196,8 +248,10 @@ export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs }) 
           '## prompt (truncated to 4k):',
           (prompt ?? '').slice(0, 4000),
           '',
-          '## last stdout (truncated to 8k):',
-          lastStdout.slice(0, 8000),
+          // Bumped to 64k so we capture the full codebuddy stdout for any
+          // realistic failure (typical successful outputs are ~30k).
+          '## last stdout (truncated to 64k):',
+          lastStdout.slice(0, 64_000),
         ].join('\n'),
       );
       log.warn(`callOnce dumped failure to ${dumpPath}`);
