@@ -14,9 +14,11 @@ type Props = {
   onToggleFullscreen: () => void;
   onToggleChrome: () => void;
   onToggleLabels: () => void;
+  onToggleWebSearch: () => void;
   fullscreen: boolean;
   showChrome: boolean;
   showLabels: boolean;
+  webSearch: boolean;
   readOnly: boolean;
   busy: boolean;
 };
@@ -25,7 +27,8 @@ export function TopBar(props: Props) {
   const {
     view, topic, currentNode, draftTopic, onDraftTopicChange, onSubmitTopic,
     onBackToGallery, onJumpBreadcrumb, onShare, onToggleFullscreen, onToggleChrome,
-    onToggleLabels, fullscreen, showChrome, showLabels, readOnly, busy,
+    onToggleLabels, onToggleWebSearch,
+    fullscreen, showChrome, showLabels, webSearch, readOnly, busy,
   } = props;
 
   const onSubmit = (e: React.FormEvent) => {
@@ -109,6 +112,19 @@ export function TopBar(props: Props) {
 
       {/* Right-side icon cluster — always mini */}
       <div className={styles.rightCluster}>
+        {!readOnly && (
+          <button
+            type="button"
+            className={styles.miniBtn}
+            onClick={onToggleWebSearch}
+            title={webSearch
+              ? 'Web search ON · 联网搜索已开启 (click to disable)'
+              : 'Web search OFF · 联网搜索已关闭 (click to enable)'}
+            aria-label="Toggle web search"
+            aria-pressed={!webSearch}
+            style={!webSearch ? { opacity: 0.5 } : undefined}
+          >{webSearch ? '🌐' : '⊘'}</button>
+        )}
         {view === 'canvas' && !readOnly && (
           <button
             type="button"

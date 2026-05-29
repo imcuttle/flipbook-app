@@ -114,6 +114,7 @@ export type AppState = {
   fullscreen: boolean;
   showChrome: boolean;                     // breadcrumb / caption / hint visibility in fullscreen
   showLabels: boolean;                     // hotspot card overlay visibility
+  webSearch: boolean;                      // ask the planner to consult the web before generating
   // Last click position on the *parent* node, used as the zoom-in origin for
   // the next child's enter animation. Cleared after the animation triggers.
   lastDrillFrom: { parentHash: string; xy: [number, number] } | null;
@@ -136,5 +137,6 @@ export const initialState: AppState = {
   fullscreen: false,
   showChrome: true,
   showLabels: true,
+  webSearch: true,
   lastDrillFrom: null,
 };

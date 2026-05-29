@@ -2,11 +2,14 @@ import type { Node, Tree, GalleryEntry } from '../state/types';
 
 const API = '/api';
 
-export async function createCanvas(topic: string): Promise<{ canvasId: string; jobId: string }> {
+export async function createCanvas(
+  topic: string,
+  opts: { webSearch?: boolean } = {},
+): Promise<{ canvasId: string; jobId: string }> {
   const res = await fetch(`${API}/canvas`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic }),
+    body: JSON.stringify({ topic, webSearch: opts.webSearch }),
   });
   if (!res.ok) throw new Error(`createCanvas failed: ${res.status}`);
   return res.json();
@@ -18,11 +21,12 @@ export async function clickAt(
   parentHash: string,
   x: number,
   y: number,
+  opts: { webSearch?: boolean } = {},
 ): Promise<{ jobId: string; queue: { active: number; pending: number; max: number } }> {
   const res = await fetch(`${API}/canvas/${canvasId}/click`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ parentHash, x, y }),
+    body: JSON.stringify({ parentHash, x, y, webSearch: opts.webSearch }),
   });
   if (!res.ok) {
     const txt = await res.text();

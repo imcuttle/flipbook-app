@@ -12,13 +12,15 @@ canvasRouter.get('/', async (_req, res) => {
 });
 
 canvasRouter.post('/', async (req, res) => {
-  const { topic, branches } = req.body || {};
+  const { topic, branches, webSearch } = req.body || {};
   if (!topic || typeof topic !== 'string' || !topic.trim()) {
     return res.status(400).json({ error: 'topic_required' });
   }
   try {
     const runtime = await createCanvas({ topic: topic.trim(), branches: Number(branches) || 5 });
-    const jobId = enqueueRootGeneration(runtime);
+    // webSearch is an opt-out boolean; default true.
+    const webSearchEnabled = webSearch !== false;
+    const jobId = enqueueRootGeneration(runtime, { webSearchEnabled });
     res.status(201).json({
       canvasId: runtime.id,
       eventsUrl: `/api/canvas/${runtime.id}/events`,

@@ -6,10 +6,10 @@ import { enqueueClickExpansion } from '../generation/pipeline.js';
 
 export const clickRouter = express.Router();
 
-// POST /api/canvas/:id/click  body: {parentHash, x, y}
+// POST /api/canvas/:id/click  body: {parentHash, x, y, webSearch?}
 clickRouter.post('/:id/click', async (req, res) => {
   const { id } = req.params;
-  const { parentHash, x, y } = req.body || {};
+  const { parentHash, x, y, webSearch } = req.body || {};
   if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
   if (!isSafeHash(parentHash)) return res.status(400).json({ error: 'bad_parent_hash' });
   const cx = Number(x);
@@ -23,7 +23,11 @@ clickRouter.post('/:id/click', async (req, res) => {
     return res.status(404).json({ error: 'parent_not_found' });
   }
   const parentNode = await readNode(id, parentHash);
-  const result = enqueueClickExpansion(runtime, { parentNode, clickXY: [cx, cy] });
+  // webSearch is an opt-out boolean; default true.
+  const webSearchEnabled = webSearch !== false;
+  const result = enqueueClickExpansion(runtime, {
+    parentNode, clickXY: [cx, cy], webSearchEnabled,
+  });
   res.status(202).json({
     jobId: result.jobId,
     parentHash,

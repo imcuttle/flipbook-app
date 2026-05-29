@@ -75,9 +75,14 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
     const target = e.target as HTMLElement | null;
     if (target?.closest?.('[data-textspan="1"]')) return;
     const stage = e.currentTarget.getBoundingClientRect();
-    const xRel = (e.clientX - stage.left) / stage.width;
-    const yRel = (e.clientY - stage.top) / stage.height;
-    const xy: [number, number] = [clamp01(xRel), clamp01(yRel)];
+    const sxRel = (e.clientX - stage.left) / stage.width;
+    const syRel = (e.clientY - stage.top) / stage.height;
+    // Convert from stage-relative to *image-relative* xy. The painted image
+    // is letterboxed inside the 16:9 stage when its aspect ratio differs
+    // (e.g. 2752×1536 ≈ 1.79 vs 1.78); without this correction the click
+    // coordinate sent to the server drifts vs the actual picture, and the
+    // pending-click bubble visually misaligns with the cursor in fullscreen.
+    const xy: [number, number] = stageToImage([sxRel, syRel]);
     pressStartPxRef.current = { x: e.clientX, y: e.clientY };
     setPressXY(xy);
     pressTimerRef.current = window.setTimeout(() => {
@@ -103,13 +108,102 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
     cancelPress();
   };
 
-  const layouts = node && showLabels ? layOutHotspots(node.hotspots) : [];
+  // Refs needed by both the imageRect measurement and the leader-line
+  // measurement below. Declared up-front so hook call order stays stable.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // --- Image rect inside the stage (object-fit: contain letterboxes when
+  // image aspect ≠ stage aspect). Used for two things:
+  //   (1) TextLayer overlay alignment.
+  //   (2) Converting between stage-relative pointer coordinates and
+  //       image-relative xy. Hotspot anchor/leader and click_xy are stored
+  //       in image space (0..1 inside the painted picture); without this
+  //       conversion they drift by the letterbox amount, which is small
+  //       in normal mode (~0.7%) but grows in fullscreen when the wrapper
+  //       aspect deviates further from 16:9.
+  const [imageRect, setImageRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const [stageHeightPx, setStageHeightPx] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!stageRef.current || !hasImage || isSvg) {
+      if (imageRect !== null) setImageRect(null);
+      return;
+    }
+    const measure = () => {
+      const stageRect = stageRef.current?.getBoundingClientRect();
+      if (!stageRect || stageRect.width === 0 || stageRect.height === 0) return;
+      setStageHeightPx(stageRect.height);
+      // We know the image's pixel dims (server-supplied). Compute the
+      // contained rect: scale uniformly to fit stage, centre.
+      const iw = node?.image_w;
+      const ih = node?.image_h;
+      if (!iw || !ih) {
+        // Without server-supplied dims, assume the image fills the stage 1:1.
+        setImageRect({ left: 0, top: 0, width: 100, height: 100 });
+        return;
+      }
+      const stageAspect = stageRect.width / stageRect.height;
+      const imgAspect = iw / ih;
+      let renderedWPct = 100;
+      let renderedHPct = 100;
+      let leftPct = 0;
+      let topPct = 0;
+      if (imgAspect > stageAspect) {
+        // image is wider than stage → fills width, letterbox top/bottom
+        renderedWPct = 100;
+        renderedHPct = (stageAspect / imgAspect) * 100;
+        leftPct = 0;
+        topPct = (100 - renderedHPct) / 2;
+      } else if (imgAspect < stageAspect) {
+        // image is taller than stage → fills height, pillarbox left/right
+        renderedHPct = 100;
+        renderedWPct = (imgAspect / stageAspect) * 100;
+        topPct = 0;
+        leftPct = (100 - renderedWPct) / 2;
+      }
+      setImageRect({ left: leftPct, top: topPct, width: renderedWPct, height: renderedHPct });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node?.hash, node?.image_w, node?.image_h, hasImage, isSvg]);
+
+  // Convert stage-relative xy (0..1 of stage box) → image-relative xy
+  // (0..1 of painted image). Inverse of imageToStage.
+  function stageToImage(xy: [number, number]): [number, number] {
+    if (!imageRect || imageRect.width === 0 || imageRect.height === 0) {
+      return [clamp01(xy[0]), clamp01(xy[1])];
+    }
+    const ix = (xy[0] * 100 - imageRect.left) / imageRect.width;
+    const iy = (xy[1] * 100 - imageRect.top) / imageRect.height;
+    return [clamp01(ix), clamp01(iy)];
+  }
+  // Convert image-relative xy → stage-relative xy (0..1 of stage box).
+  function imageToStage(xy: [number, number]): [number, number] {
+    if (!imageRect) return [clamp01(xy[0]), clamp01(xy[1])];
+    const sx = (imageRect.left + xy[0] * imageRect.width) / 100;
+    const sy = (imageRect.top + xy[1] * imageRect.height) / 100;
+    return [clamp01(sx), clamp01(sy)];
+  }
+
+  // Hotspot anchor_xy / leader_xy are stored in image-relative space. We
+  // transform them into stage-relative space (using imageRect) before
+  // running the layout pass, so the cards and leader endpoints line up
+  // with the painted picture even when it's letterboxed.
+  const layouts = node && showLabels
+    ? layOutHotspots(node.hotspots.map((h) => {
+        const a: [number, number] = h.anchor_xy ?? [0, 0];
+        const l: [number, number] = h.leader_xy ?? a;
+        return { ...h, anchor_xy: imageToStage(a), leader_xy: imageToStage(l) };
+      }))
+    : [];
 
   // --- Leader-line geometry: measure card rects so the line lands on the
   // actual card edge instead of a guessed centre. We re-measure whenever
   // layouts (anchors) change, the node changes, or the window resizes.
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // Card rects in PERCENT of the stage (left, top, w, h). Index aligns with
   // layouts[*].idx. Empty until first measurement after mount.
   const [cardRects, setCardRects] = useState<Record<number, { l: number; t: number; w: number; h: number }>>({});
@@ -158,59 +252,6 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
     const t = Math.min(tx, ty);
     return [cx + dx * t, cy + dy * t] as const;
   }
-
-  // --- TextLayer geometry: figure out the actually-rendered image rect
-  // inside the stage (object-fit: contain letterboxes when image aspect ≠
-  // stage aspect) and pass it + the stage height in px to TextLayer so the
-  // overlay aligns with the painted pixels even on resize.
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const [imageRect, setImageRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
-  const [stageHeightPx, setStageHeightPx] = useState(0);
-
-  useLayoutEffect(() => {
-    if (!stageRef.current || !node?.text_layer?.length || isSvg) {
-      if (imageRect !== null) setImageRect(null);
-      return;
-    }
-    const measure = () => {
-      const stageRect = stageRef.current?.getBoundingClientRect();
-      if (!stageRect || stageRect.width === 0 || stageRect.height === 0) return;
-      setStageHeightPx(stageRect.height);
-      // We know the image's pixel dims (server-supplied). Compute the
-      // contained rect: scale uniformly to fit stage, centre.
-      const iw = node?.image_w;
-      const ih = node?.image_h;
-      if (!iw || !ih) {
-        // Without server-supplied dims, assume the image fills the stage 1:1.
-        setImageRect({ left: 0, top: 0, width: 100, height: 100 });
-        return;
-      }
-      const stageAspect = stageRect.width / stageRect.height;
-      const imgAspect = iw / ih;
-      let renderedWPct = 100;
-      let renderedHPct = 100;
-      let leftPct = 0;
-      let topPct = 0;
-      if (imgAspect > stageAspect) {
-        // image is wider than stage → fills width, letterbox top/bottom
-        renderedWPct = 100;
-        renderedHPct = (stageAspect / imgAspect) * 100;
-        leftPct = 0;
-        topPct = (100 - renderedHPct) / 2;
-      } else if (imgAspect < stageAspect) {
-        // image is taller than stage → fills height, pillarbox left/right
-        renderedHPct = 100;
-        renderedWPct = (imgAspect / stageAspect) * 100;
-        topPct = 0;
-        leftPct = (100 - renderedWPct) / 2;
-      }
-      setImageRect({ left: leftPct, top: topPct, width: renderedWPct, height: renderedHPct });
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node?.hash, node?.image_w, node?.image_h, node?.text_layer?.length, isSvg]);
 
   let stageClass = styles.stage;
   if (readOnly) stageClass += ` ${styles.stageReadOnly}`;
@@ -306,27 +347,33 @@ export function Canvas({ canvasId, node, imageLoading, pendingClicks, readOnly, 
           ))}
         </div>
 
-        {/* Long-press progress ring at the cursor while user is holding down */}
-        {pressXY && <LongPressIndicator xy={pressXY} durationMs={LONG_PRESS_MS} />}
+        {/* Long-press progress ring at the cursor while user is holding down.
+             pressXY is image-relative; place it in stage space so the ring
+             tracks the actual cursor even when the image is letterboxed. */}
+        {pressXY && <LongPressIndicator xy={imageToStage(pressXY)} durationMs={LONG_PRESS_MS} />}
 
-        {/* Pending click progress bubbles */}
-        {pendingClicks.map((p) => (
-          <div
-            key={p.jobId}
-            className={styles.pendingClick}
-            style={{
-              left: pct(p.clickXY[0]),
-              top: pct(p.clickXY[1]),
-            }}
-            title={PHASE_TEXT_EN[p.phase]}
-          >
-            <span className={styles.pendingDot} />
-            <span className={styles.pendingLabel}>
-              <span>{PHASE_TEXT_CN[p.phase]}</span>
-              <span>{PHASE_TEXT_EN[p.phase]}</span>
-            </span>
-          </div>
-        ))}
+        {/* Pending click progress bubbles. clickXY is image-relative; convert
+            to stage space for absolute positioning. */}
+        {pendingClicks.map((p) => {
+          const [sx, sy] = imageToStage(p.clickXY);
+          return (
+            <div
+              key={p.jobId}
+              className={styles.pendingClick}
+              style={{
+                left: pct(sx),
+                top: pct(sy),
+              }}
+              title={PHASE_TEXT_EN[p.phase]}
+            >
+              <span className={styles.pendingDot} />
+              <span className={styles.pendingLabel}>
+                <span>{PHASE_TEXT_CN[p.phase]}</span>
+                <span>{PHASE_TEXT_EN[p.phase]}</span>
+              </span>
+            </div>
+          );
+        })}
 
         {/* Capacity badge in top-right when 4/4 */}
         {atCapacity && !readOnly && (

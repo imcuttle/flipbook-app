@@ -13,6 +13,7 @@ export type Action =
   | { type: 'set_fullscreen'; on: boolean }
   | { type: 'toggle_chrome' }
   | { type: 'toggle_labels' }
+  | { type: 'toggle_web_search' }
   | { type: 'consume_drill_origin' }
   | { type: 'add_toast'; toast: Omit<Toast, 'id'> }
   | { type: 'remove_toast'; id: number };
@@ -53,6 +54,8 @@ export function reducer(state: AppState, action: Action): AppState {
           ...initialState,
           view: 'gallery',
           toasts: state.toasts,
+          // Preserve UI prefs that aren't tied to a specific canvas.
+          webSearch: state.webSearch,
         };
       }
       return { ...state, view: action.view };
@@ -64,6 +67,9 @@ export function reducer(state: AppState, action: Action): AppState {
         canvasId: action.canvasId,
         topic: action.topic,
         status: { phase: 'planning' },
+        // Preserve UI prefs across canvas creation so a user who turned web
+        // search off doesn't have it silently re-enabled on the next topic.
+        webSearch: state.webSearch,
       };
 
     case 'set_share_mode':
@@ -120,6 +126,9 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'toggle_labels':
       return { ...state, showLabels: !state.showLabels };
+
+    case 'toggle_web_search':
+      return { ...state, webSearch: !state.webSearch };
 
     case 'consume_drill_origin':
       return state.lastDrillFrom ? { ...state, lastDrillFrom: null } : state;

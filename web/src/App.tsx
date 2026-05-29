@@ -202,13 +202,13 @@ export default function App() {
     const topic = draftTopic.trim();
     if (!topic || state.readOnly) return;
     try {
-      const { canvasId } = await createCanvas(topic);
+      const { canvasId } = await createCanvas(topic, { webSearch: state.webSearch });
       dispatch({ type: 'canvas_created', canvasId, topic });
       setDraftTopic('');
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Create failed: ${(e as Error).message}` } });
     }
-  }, [draftTopic, state.readOnly]);
+  }, [draftTopic, state.readOnly, state.webSearch]);
 
   const onImageClick = useCallback(async (xy: [number, number]) => {
     if (state.readOnly) return;
@@ -216,7 +216,7 @@ export default function App() {
     // Cap is enforced server-side; UI prevents new clicks at capacity, but
     // race-safe behaviour: if server rejects we still gracefully toast.
     try {
-      const r = await clickAt(state.canvasId, state.currentHash, xy[0], xy[1]);
+      const r = await clickAt(state.canvasId, state.currentHash, xy[0], xy[1], { webSearch: state.webSearch });
       dispatch({
         type: 'click_pending_local',
         jobId: r.jobId,
@@ -226,7 +226,7 @@ export default function App() {
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Click failed: ${(e as Error).message}` } });
     }
-  }, [state.canvasId, state.currentHash, state.readOnly]);
+  }, [state.canvasId, state.currentHash, state.readOnly, state.webSearch]);
 
   const onHotspotClick = useCallback((index: number) => {
     if (!state.currentHash || !state.canvasId) return;
@@ -326,6 +326,10 @@ export default function App() {
     dispatch({ type: 'toggle_labels' });
   }, []);
 
+  const onToggleWebSearch = useCallback(() => {
+    dispatch({ type: 'toggle_web_search' });
+  }, []);
+
   const currentNode = state.currentHash ? state.nodes[state.currentHash] : null;
   const busy = state.status.phase === 'planning' || state.status.phase === 'image_loading';
   const imageLoadingForCurrent =
@@ -393,9 +397,11 @@ export default function App() {
           onToggleFullscreen={onToggleFullscreen}
           onToggleChrome={onToggleChrome}
           onToggleLabels={onToggleLabels}
+          onToggleWebSearch={onToggleWebSearch}
           fullscreen={state.fullscreen}
           showChrome={state.showChrome}
           showLabels={state.showLabels}
+          webSearch={state.webSearch}
           readOnly={state.readOnly}
           busy={busy}
         />

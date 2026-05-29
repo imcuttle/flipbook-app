@@ -10,6 +10,10 @@
 .topbar.compact {
   padding: 6px 10px;
   gap: 6px;
+  /* In fullscreen the surrounding shell becomes beige; match it so the
+     topbar doesn't read as a separate white strip above the diagram. */
+  background: var(--bg);
+  border-bottom-color: transparent;
 }
 
 .dots {

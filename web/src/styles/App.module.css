@@ -29,6 +29,10 @@
   border: 0;
   height: 100vh;
   height: 100dvh;
+  /* Match the stage's beige so the painted image (which uses the same beige
+     for its background) blends seamlessly with the page chrome — no white
+     frame around the diagram in fullscreen / casting view. */
+  background: var(--bg);
 }
 
 .canvas {

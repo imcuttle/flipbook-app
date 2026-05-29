@@ -74,7 +74,10 @@ function decideCall(args) {
   }));
 }
 
-async function decideAndSearch({ canvas, jobId, topic, path, currentLabel, depth, intent }) {
+async function decideAndSearch({ canvas, jobId, topic, path, currentLabel, depth, intent, webSearchEnabled }) {
+  // Per-job opt-out: if the UI toggled web search off, skip the decide gate
+  // and the search call entirely. The planner runs without sources.
+  if (webSearchEnabled === false) return [];
   let decision;
   try {
     decision = await decideCall({ topic, path, currentLabel, intent, depth });
@@ -121,7 +124,7 @@ function imageUrlFor(canvasId, hash, ext) {
 
 // --------- Core: build a new node (planner + image) ---------
 async function buildAndRegisterNode({
-  canvas, parentNode, jobId, currentLabel, hashSeed,
+  canvas, parentNode, jobId, currentLabel, hashSeed, webSearchEnabled,
 }) {
   const depth = parentNode ? (parentNode.depth ?? 0) + 1 : 0;
 
@@ -133,6 +136,7 @@ async function buildAndRegisterNode({
     currentLabel: currentLabel ?? '',
     depth,
     intent: parentNode ? 'drilldown' : 'root',
+    webSearchEnabled,
   });
 
   let plannerJson;
@@ -266,6 +270,7 @@ export async function generateRootNode(canvas, args = {}) {
   const { node, cacheHit } = await buildAndRegisterNode({
     canvas, parentNode: null, jobId,
     currentLabel: '', hashSeed: canvas.topic,
+    webSearchEnabled: args.webSearchEnabled,
   });
   broadcast(canvas, {
     type: SseEvents.DONE, canvasId: canvas.id, jobId, hash: node.hash, cacheHit,
@@ -276,7 +281,7 @@ export async function generateRootNode(canvas, args = {}) {
 // --------- Public: click → label → child node + parent hotspot append ---------
 export async function expandFromClick(canvas, args = {}) {
   const jobId = args.jobId || nanoid(8);
-  const { parentNode, clickXY } = args;
+  const { parentNode, clickXY, webSearchEnabled } = args;
   if (!parentNode || !Array.isArray(clickXY)) throw new Error('parentNode and clickXY required');
 
   // Spatial dedup: if there's already a hotspot near this click, jump to its child.
@@ -355,6 +360,7 @@ export async function expandFromClick(canvas, args = {}) {
     canvas, parentNode: parentAfterAppend, jobId,
     currentLabel: labelOut.label,
     hashSeed: labelOut.label,
+    webSearchEnabled,
   });
 
   // 4) Link child on parent's hotspot — re-read inside the lock to avoid
@@ -392,9 +398,10 @@ export async function expandFromClick(canvas, args = {}) {
 }
 
 // --------- Queueing helpers ---------
-export function enqueueRootGeneration(canvas) {
+export function enqueueRootGeneration(canvas, opts = {}) {
   const jobId = nanoid(8);
-  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId }).catch((e) => {
+  const webSearchEnabled = opts.webSearchEnabled !== false; // default on
+  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled }).catch((e) => {
     log.error('generateRootNode failed:', e?.stack || e);
   }));
   return jobId;
@@ -403,11 +410,14 @@ export function enqueueRootGeneration(canvas) {
 // Click expansions: capped at MAX_PARALLEL_CLICKS_PER_NODE per (canvas, parent).
 // Different parents and different canvases run in parallel. Excess clicks are
 // queued in arrival order until a slot frees up.
-export function enqueueClickExpansion(canvas, { parentNode, clickXY }) {
+export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEnabled }) {
   const jobId = nanoid(8);
   const key = clickKey(canvas.id, parentNode.hash);
+  const enabled = webSearchEnabled !== false; // default on
   // Fire-and-forget; progress is reported via SSE.
-  clickSem.run(key, () => expandFromClick(canvas, { parentNode, clickXY, jobId }))
+  clickSem.run(key, () => expandFromClick(canvas, {
+    parentNode, clickXY, jobId, webSearchEnabled: enabled,
+  }))
     .catch((e) => log.error('expandFromClick failed:', e?.stack || e));
   // Surface queue stats so the route can echo them back to the client.
   return {
