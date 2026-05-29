@@ -2,6 +2,16 @@
 
 **English** · [中文](./README.zh.md)
 
+[![Node](https://img.shields.io/badge/Node.js-%E2%89%A520.10-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-Sequelize-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Multimodal](https://img.shields.io/badge/Multimodal-LLM%20%C3%97%20ImageGen%20%C3%97%20WebSearch%20%C3%97%20OCR-FF6F61)](#-multimodal--mainstream-llms)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/imcuttle/flipbook-app/pulls)
+[![GitHub stars](https://img.shields.io/github/stars/imcuttle/flipbook-app?style=social)](https://github.com/imcuttle/flipbook-app/stargazers)
+
 > ✨ Click anywhere on a generated image. The backend infers what you clicked,
 > searches the web when useful, generates a child diagram, and links it back.
 > **A flipbook of explorable knowledge — one click at a time.**
@@ -9,8 +19,6 @@
 > 💡 Inspired by and a re-implementation of the product idea behind
 > [flipbook.page](https://flipbook.page) — credit to the original team for the
 > click-to-explore canvas concept.
-
-![Flipbook Canvas demo](./docs/assets/demo.gif)
 
 A long-running web product: **Express + SSE** backend, **Vite + React + TS**
 frontend, a **pluggable multi-model image pipeline**, web-search augmented
@@ -37,6 +45,29 @@ Most "AI画图" demos stop at one image. This one turns each image into a
   any fragment straight off the picture.
 - 🌳 **Infinite tree of canvases** — every click spawns a child node; the
   whole exploration tree is persisted, shareable, and replayable.
+
+---
+
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="./docs/assets/demo.gif" alt="Click-to-explore demo" />
+      <br/><sub><b>Click-to-explore</b> — long-press any region to drill in</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="./docs/assets/woodpecker.gif" alt="Woodpecker walkthrough" />
+      <br/><sub><b>End-to-end pipeline</b> — search → planner → ImageGen → drill-down</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="./docs/assets/screenshot.png" alt="Gallery and canvas" />
+      <br/><sub><b>Gallery + canvas</b> — every canvas is persisted, shareable, replayable</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -70,8 +101,6 @@ Most "AI画图" demos stop at one image. This one turns each image into a
   while the painted pixels remain the visual ground truth.
 - 📱 **Mobile responsive**: top bar collapses to icons, single-column gallery,
   smaller hotspots and pending bubbles.
-
-![Gallery and canvas](./docs/assets/screenshot.png)
 
 ---
 
@@ -126,8 +155,6 @@ Type `啄木鸟` (woodpecker) into the top bar and watch the entire pipeline run
 decide-then-search → planner → ImageGen → click to drill into the tongue
 anatomy / nest cavity / ant-foraging zones, each spawning its own annotated
 diagram with its own sources.
-
-![Generating a woodpecker flipbook from scratch](./docs/assets/woodpecker.gif)
 
 ---
 

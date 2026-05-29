@@ -2,13 +2,21 @@
 
 [English](./README.md) · **中文**
 
+[![Node](https://img.shields.io/badge/Node.js-%E2%89%A520.10-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-Sequelize-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Multimodal](https://img.shields.io/badge/%E5%A4%9A%E6%A8%A1%E6%80%81-LLM%20%C3%97%20ImageGen%20%C3%97%20WebSearch%20%C3%97%20OCR-FF6F61)](#-多模态--主流大模型)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/imcuttle/flipbook-app/pulls)
+[![GitHub stars](https://img.shields.io/github/stars/imcuttle/flipbook-app?style=social)](https://github.com/imcuttle/flipbook-app/stargazers)
+
 > ✨ 在生成的图片上任意位置长按。后端会推断你点的是什么、必要时联网搜索资料、
 > 生成一张子图并把它链回来。**一本可以"点出来"的可探索画册 —— 一次一个点击。**
 
 > 💡 本项目基于 [flipbook.page](https://flipbook.page) 的产品理念设计与实现，
 > "点击图片继续往下钻"的画布交互思路源自该产品，特此致谢原团队。
-
-![Flipbook Canvas 演示](./docs/assets/demo.gif)
 
 一个常驻 Web 产品：**Express + SSE** 后端、**Vite + React + TS** 前端、
 **可插拔的多模型图像生成流水线**、联网搜索增强的 planner、按节点并发、只读
@@ -31,6 +39,29 @@
   直接拖选、复制任意片段。
 - 🌳 **画布是无限延伸的树** —— 每次点击都生成一个子节点；整棵探索树会被持久
   化、可分享、可回放。
+
+---
+
+## 📸 截图速览
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="./docs/assets/demo.gif" alt="点击式探索演示" />
+      <br/><sub><b>点击式探索</b> — 长按任意区域即可钻入</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="./docs/assets/woodpecker.gif" alt="啄木鸟完整流水线" />
+      <br/><sub><b>端到端流水线</b> — 搜索 → planner → ImageGen → 钻入</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="./docs/assets/screenshot.png" alt="画廊与画布" />
+      <br/><sub><b>画廊 + 画布</b> — 每个画布都被持久化、可分享、可回放</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -61,8 +92,6 @@
   文本作为透明 HTML 层覆盖在图片上 —— 看起来还是手绘的画风，但用户可以
   直接在图上拖选、Cmd-C 复制任意文字。
 - 📱 **移动端适配**：顶栏收拢成图标、单列画廊、热点和待处理气泡按比例缩小。
-
-![画廊与画布](./docs/assets/screenshot.png)
 
 ---
 
@@ -114,8 +143,6 @@ export default {
 在顶栏输入 `啄木鸟`，从零观察整条流水线跑完：决策搜索 → 联网检索 →
 planner → ImageGen → 点击图中的舌部解剖 / 巢洞剖面 / 草地觅食几个区域，每
 个区域都会衍生出自己的图鉴页和自己的参考来源。
-
-![从零生成啄木鸟画册](./docs/assets/woodpecker.gif)
 
 ---
 
