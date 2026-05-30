@@ -39,6 +39,20 @@ export type Node = {
   // Used by the UI on navigation to default the toggle to the value picked
   // when this node was created.
   web_search_used?: boolean;
+  // Persisted seed-image absolute path (server-side filesystem) — present
+  // when this node was generated from an uploaded image. The frontend
+  // mostly uses it as an "this node had a seed" signal; the actual file
+  // isn't fetchable over the API.
+  seed_image?: string | null;
+  // Snapshot of the original click context that produced this node.
+  // Replayed by the regenerate flow; also surfaced as the info-hover
+  // popover in the More menu.
+  gen_inputs?: {
+    parent_hash: string;
+    click_xy: [number, number];
+    user_label: string | null;
+    seed_image: string | null;
+  } | null;
   path: { hash: string; title: string }[];
   generated_at: string;
   style_tag: string;
@@ -62,6 +76,7 @@ export type SseEvent =
   | { type: 'ocr_done'; canvasId: string; jobId: string; hash: string; spanCount: number }
   | { type: 'node_ready'; canvasId: string; jobId: string; hash: string; node: Node }
   | { type: 'tree_updated'; canvasId: string; jobId: string; treeNodeCount: number }
+  | { type: 'phase_message'; canvasId: string; jobId: string; messageKey: string; messageEn: string }
   | { type: 'gen_error'; canvasId: string; jobId: string; phase: 'plan' | 'image' | 'register'; message: string; recoverable: boolean; code?: string }
   | { type: 'click_rejected'; canvasId: string; jobId: string; parentHash: string; clickXY: [number, number]; reason: string }
   | { type: 'node_deleted'; canvasId: string; hash: string; deletedHashes: string[]; parentHash: string | null }
@@ -99,6 +114,11 @@ export type PendingClick = {
   clickXY: [number, number];
   phase: 'planning' | 'image_loading' | 'finalizing';
   startedAt: number;
+  // Optional user-facing progress line streamed by the server (i18n key
+  // + english fallback). When present the canvas's pending bubble shows
+  // this instead of the static phase chip.
+  messageKey?: string;
+  messageEn?: string;
 };
 
 export type AppState = {

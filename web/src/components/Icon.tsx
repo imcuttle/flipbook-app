@@ -24,6 +24,7 @@ import {
   ImagePlus,         // image-with-plus alt for click composer
   RotateCcw,         // ↻ regenerate / re-roll
   MousePointerClick, // 🖱 long-press / compose-on-click toggle
+  Info,              // ⓘ info hover
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -51,6 +52,7 @@ const REGISTRY = {
   'image-plus': ImagePlus,
   regenerate: RotateCcw,
   'long-press': MousePointerClick,
+  info: Info,
 } as const;
 
 export type IconName = keyof typeof REGISTRY;

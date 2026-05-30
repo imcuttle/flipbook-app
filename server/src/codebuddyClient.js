@@ -303,14 +303,14 @@ export async function callImageGen({
   // and subject carry over) or ImageGen (text-to-image, no seed).
   // Both tools accept output_dir + return their actual filename via
   // tool_result; we capture it from the SSE event.
-  function buildUserMessage(seed) {
+  function buildUserMessage(seed, promptText) {
     return seed
       ? [
           'Use the ImageEdit tool exactly once with the parameters below via DeferExecuteTool.',
           'After the tool returns, reply with a single word "OK" and nothing else.',
           '',
           'Tool name: ImageEdit',
-          `prompt: ${imagePrompt}`,
+          `prompt: ${promptText}`,
           `image: ${seed}`,
           `size: ${size}`,
           `output_dir: ${outputDir}`,
@@ -320,7 +320,7 @@ export async function callImageGen({
           'After the tool returns, reply with a single word "OK" and nothing else.',
           '',
           'Tool name: ImageGen',
-          `prompt: ${imagePrompt}`,
+          `prompt: ${promptText}`,
           `size: ${size}`,
           `output_dir: ${outputDir}`,
         ].join('\n');
@@ -335,15 +335,22 @@ export async function callImageGen({
 
   return sem.run(async () => {
     let lastErr;
-    // Up to 3 attempts: 1) ImageEdit with seed (when provided),
-    // 2) retry the same, 3) DOWNGRADE to ImageGen without seed when the
-    // first two failed and we had a seed (model often refuses ImageEdit
-    // on sensitive imagery — text-to-image of the planner's vivid
-    // description still produces a usable result).
+    // Up to 3 attempts when a seed image is attached:
+    //   1) ImageEdit with seed,
+    //   2) retry the same,
+    //   3) DOWNGRADE to ImageGen text-to-image without the seed (the
+    //      seed-aware planner has already baked the visual subject into
+    //      the prompt, so text-only generation still produces a usable
+    //      image when ImageEdit was refused on the source).
+    // Without a seed it's just 2 attempts of ImageGen.
+    // Per-attempt prompt repair is handled at the orchestrator layer
+    // (server/src/generation/image.js) — when this function fails with
+    // prose refusal, the orchestrator runs an LLM-driven repair pass
+    // and may call us again with a rewritten prompt.
     const maxAttempts = seedImagePath ? 3 : 2;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const useSeed = seedImagePath && attempt < 3;
-      const userMessage = buildUserMessage(useSeed ? seedImagePath : null);
+      const userMessage = buildUserMessage(useSeed ? seedImagePath : null, imagePrompt);
       try {
         capturedPath = null;
         assistantProse = '';
@@ -413,11 +420,31 @@ export async function callImageGen({
           ? ` | model prose: "${assistantProse.replace(/\s+/g, ' ').slice(0, 200)}"`
           : '';
         log.warn(`callImageGen attempt ${attempt} (${useSeed ? 'edit' : 'gen'}) failed: ${e?.message}${proseSummary}`);
-        // If this attempt was image-edit and failed, attempt 3 will fall
-        // through to text-to-image without the seed.
+        // Optimisation: if this attempt was image-edit AND we failed
+        // because the model returned prose (capturedPath null + non-empty
+        // assistantProse), attempt 2 with the same prompt+image will get
+        // the same refusal — skip directly to attempt 3 (text-to-image
+        // without the seed).
+        if (
+          useSeed
+          && attempt === 1
+          && capturedPath === null
+          && assistantProse
+          && maxAttempts === 3
+        ) {
+          log.warn('callImageGen: prose refusal on edit; skipping attempt 2 → straight to text-to-image fallback');
+          attempt = 2; // for-loop ++ takes us to attempt 3 next iteration
+        }
       }
     }
-    return { ok: false, reason: lastErr?.message ?? 'image generation failed' };
+    return {
+      ok: false,
+      reason: lastErr?.message ?? 'image generation failed',
+      // Carry the model's last-attempt prose so the orchestrator can
+      // decide whether this was a content-policy refusal worth running
+      // an LLM-driven prompt repair against.
+      refusalProse: assistantProse || null,
+    };
   });
 }
 

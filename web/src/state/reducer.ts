@@ -270,6 +270,22 @@ function applySse(state: AppState, evt: SseEvent): AppState {
     case 'tree_updated':
       return state;
 
+    case 'phase_message': {
+      // Stream a user-facing progress line into the matching pending
+      // click bubble so the user sees what step is currently running
+      // (analysing image / searching / planning / repairing prompt /
+      // generating image / etc.) instead of just a static phase chip.
+      const c = state.pendingClicks[evt.jobId];
+      if (!c) return state;
+      return {
+        ...state,
+        pendingClicks: {
+          ...state.pendingClicks,
+          [evt.jobId]: { ...c, messageKey: evt.messageKey, messageEn: evt.messageEn },
+        },
+      };
+    }
+
     case 'click_rejected': {
       // The label LLM didn't see anything drillable under the click.
       // Drop the pending bubble + tell the user to pick a different spot.

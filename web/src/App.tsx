@@ -233,7 +233,16 @@ export default function App() {
         webSearch: state.webSearch,
         image: topicAttachment?.file ?? null,
       });
-      dispatch({ type: 'canvas_created', canvasId, topic: topic || topicAttachment?.file?.name?.replace(/\.[^.]+$/, '') || 'Untitled' });
+      // Sync the in-memory topic to whatever the server stored. When only
+      // an image was uploaded, the server uses '__pending__' as a sentinel
+      // until the planner produces a real title — we keep that sentinel in
+      // state so displayTopic() shows the localised "Content generating…"
+      // placeholder rather than the file's name.
+      dispatch({
+        type: 'canvas_created',
+        canvasId,
+        topic: topic || '__pending__',
+      });
       setDraftTopic('');
       revokeSelection(topicAttachment);
       setTopicAttachment(null);

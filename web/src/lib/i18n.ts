@@ -101,7 +101,13 @@ export const messages: Catalogue = {
   'topbar.web': { zh: '联网搜索', en: 'Web search' },
   'topbar.compose-on-click': { zh: '长按输入', en: 'Long-press input' },
   'topbar.labels': { zh: '热点标签', en: 'Hotspot labels' },
-  'topbar.regenerate': { zh: '重新生成当前画布', en: 'Regenerate this canvas' },
+  'topbar.regenerate': { zh: '重新生成', en: 'Re-roll' },
+  'topbar.regenerate.info': { zh: '查看生成输入', en: 'Show generation inputs' },
+  'topbar.regenerate.input.topic': { zh: '主题', en: 'Topic' },
+  'topbar.regenerate.input.label': { zh: '点击标签', en: 'Click label' },
+  'topbar.regenerate.input.click': { zh: '点击位置', en: 'Click point' },
+  'topbar.regenerate.input.image': { zh: '上传图片', en: 'Uploaded image' },
+  'topbar.regenerate.input.none': { zh: '无', en: '—' },
   'topbar.more': { zh: '更多', en: 'More' },
 
   // Sentinel topic shown while a canvas created from an image-only upload
@@ -123,6 +129,19 @@ export const messages: Catalogue = {
   'phase.planning': { zh: '推断标签…', en: 'Inferring label…' },
   'phase.image': { zh: '生成图片…', en: 'Generating image…' },
   'phase.finalizing': { zh: '收尾中…', en: 'Finalizing…' },
+
+  // Streamed progress lines (server SSE phase_message → reducer →
+  // pending click bubble). One per pipeline milestone — fall back to
+  // messageEn when the i18n entry is missing.
+  'phase.seed.describe':   { zh: '正在分析您上传的图片…',           en: 'Analysing your image…' },
+  'phase.search':          { zh: '正在联网搜索资料…',                en: 'Searching the web for facts…' },
+  'phase.planner':         { zh: '正在拟标题、说明和画面构图…',      en: 'Drafting title, caption and scene…' },
+  'phase.image.gen':       { zh: '正在生成图片…',                    en: 'Generating illustration…' },
+  'phase.image.edit':      { zh: '基于您的图片生成带标注的画面…',    en: 'Generating annotated image from your upload…' },
+  'phase.image.repair':    { zh: '图像模型暂时拒绝,正在改写提示…',  en: 'Image model declined — refining prompt…' },
+  'phase.image.retry':     { zh: '使用改写后的提示重试…',            en: 'Retrying with refined prompt…' },
+  'phase.image.done':      { zh: '图像已就绪',                        en: 'Image ready' },
+  'phase.image.fallback':  { zh: '图像生成失败,使用占位图',           en: 'Image generation failed — using placeholder' },
 
   // Hotspot card
   'hotspot.delete.tip': { zh: '删除该分支', en: 'Delete this branch' },

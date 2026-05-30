@@ -8,6 +8,12 @@ export const SseEvents = Object.freeze({
   IMAGE_READY: 'image_ready',
   OCR_DONE: 'ocr_done',
   NODE_READY: 'node_ready',
+  // A user-friendly progress line for the pending click bubble. Sent
+  // throughout generation (describeSeed / search / planner / image
+  // attempts / repair retry) with a `messageKey` (i18n id the client
+  // resolves) plus an optional english fallback `messageEn` for clients
+  // without a translation. Cheap to ignore by clients that don't care.
+  PHASE_MESSAGE: 'phase_message',
   TREE_UPDATED: 'tree_updated',
   // Renamed from 'error' to 'gen_error' so addEventListener('error') in the
   // browser doesn't collide with EventSource's built-in connection-error

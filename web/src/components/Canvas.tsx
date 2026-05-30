@@ -385,7 +385,21 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
             to stage space for absolute positioning. */}
         {pendingClicks.map((p) => {
           const [sx, sy] = imageToStage(p.clickXY);
-          const phaseLabel = t(PHASE_KEY[p.phase], lang);
+          // Prefer the server-streamed phase_message (specific to the
+          // current step inside the pipeline — e.g. "Searching the web…"
+          // / "Refining prompt…" / "Generating illustration…") over the
+          // coarse PHASE_KEY chip. Fall back to messageEn when the i18n
+          // entry isn't translated, then to the static phase chip.
+          let phaseLabel = t(PHASE_KEY[p.phase], lang);
+          if (p.messageKey) {
+            const i18nKey = p.messageKey as Parameters<typeof t>[0];
+            const localised = t(i18nKey, lang);
+            // i18n.t returns the key string itself when missing — detect
+            // that and fall through to messageEn.
+            phaseLabel = localised && localised !== p.messageKey
+              ? localised
+              : (p.messageEn || phaseLabel);
+          }
           return (
             <div
               key={p.jobId}

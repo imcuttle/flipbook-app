@@ -149,15 +149,24 @@
   margin: 4px 0 0;
 }
 
-/* In-flight click bubble: shows where the user clicked + which stage of generation */
+/* In-flight click bubble: shows where the user clicked + which stage of
+   generation. The wrapper is positioned exactly at the click coordinate
+   (the parent's `left/top` inline style); the DOT sits centred ON that
+   point and the LABEL pill sits to the right of the dot. We don't put
+   transform:translate(-50%,-50%) on the wrapper because that would also
+   shift the label and pull the dot off the user's actual cursor position. */
 .pendingClick {
   position: absolute;
-  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   gap: 6px;
   pointer-events: none;
   z-index: 5;
+  /* Vertically centre the row at the click y; horizontally leave the
+     wrapper's left edge AT the click x — the dot's own translate centres
+     it on the wrapper's left edge, putting the dot exactly on the click
+     point. */
+  transform: translateY(-50%);
 }
 
 .pendingDot {
@@ -168,6 +177,10 @@
   box-shadow: 0 0 0 6px rgba(31, 31, 31, 0.18);
   animation: pulse 1.6s ease-out infinite;
   flex-shrink: 0;
+  /* Centre the dot on the wrapper's left edge — combined with the
+     wrapper's translateY(-50%), this puts the dot exactly on the click
+     point (image-relative xy) regardless of how wide the label is. */
+  transform: translateX(-50%);
 }
 
 @keyframes pulse {

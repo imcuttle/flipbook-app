@@ -46,6 +46,24 @@ function genLog(jobId, phase, msg, extra) {
   else log.info(prefix, msg);
 }
 
+// Push a user-friendly progress line through SSE so the pending click
+// bubble can display "Analysing your image…" / "Searching the web…" /
+// etc. instead of just the static phase chip. `messageKey` is an i18n
+// identifier the client resolves; `messageEn` is the fallback string
+// for clients that don't have a localised entry.
+function emitPhaseMessage(canvas, jobId, messageKey, messageEn, extra = {}) {
+  try {
+    broadcast(canvas, {
+      type: SseEvents.PHASE_MESSAGE,
+      canvasId: canvas.id,
+      jobId,
+      messageKey,
+      messageEn,
+      ...extra,
+    });
+  } catch { /* SSE write errors are logged in the hub */ }
+}
+
 function clickKey(canvasId, parentHash) { return `${canvasId}::${parentHash}`; }
 
 export function clickQueueStatus(canvasId, parentHash) {
@@ -167,6 +185,7 @@ async function buildAndRegisterNode({
   if (seedImagePath && config.enableCodebuddy) {
     const t = Date.now();
     genLog(jobId, 'seed.describe', `analysing ${seedImagePath.split('/').pop()}…`);
+    emitPhaseMessage(canvas, jobId, 'phase.seed.describe', 'Analysing your image…');
     try {
       seedDescription = await describeSeedImage({
         seedImagePath,
@@ -201,6 +220,7 @@ async function buildAndRegisterNode({
     const tSearch = Date.now();
     genLog(jobId, 'search.seed',
       `running ${seedDescription.search_queries.length} image-derived queries`);
+    emitPhaseMessage(canvas, jobId, 'phase.search', 'Searching the web for facts about the subject…');
     broadcast(canvas, {
       type: SseEvents.SEARCH_STARTED, canvasId: canvas.id, jobId,
       queries: seedDescription.search_queries,
@@ -222,6 +242,9 @@ async function buildAndRegisterNode({
     });
   } else {
     const tSearch = Date.now();
+    if (webSearchEnabled !== false) {
+      emitPhaseMessage(canvas, jobId, 'phase.search', 'Searching the web for facts about the subject…');
+    }
     sources = await decideAndSearch({
       canvas, jobId,
       topic: effectiveSubject,
@@ -241,6 +264,7 @@ async function buildAndRegisterNode({
 
   const tPlanner = Date.now();
   genLog(jobId, 'planner', `topic="${effectiveSubject}" sources=${sources.length}`);
+  emitPhaseMessage(canvas, jobId, 'phase.planner', 'Drafting title, caption and scene…');
   let plannerJson;
   try {
     plannerJson = await plannerCall({
@@ -315,6 +339,9 @@ async function buildAndRegisterNode({
   const tImage = Date.now();
   genLog(jobId, 'image', `${seedImagePath ? 'image-edit' : 'text-to-image'} hash=${hash}`);
   broadcast(canvas, { type: SseEvents.IMAGE_STARTED, canvasId: canvas.id, jobId, hash });
+  emitPhaseMessage(canvas, jobId,
+    seedImagePath ? 'phase.image.edit' : 'phase.image.gen',
+    seedImagePath ? 'Generating annotated image from your upload…' : 'Generating illustration…');
   let imageOutcome;
   try {
     imageOutcome = await generateImage({
@@ -322,9 +349,23 @@ async function buildAndRegisterNode({
       title: plannerJson.title, imagePrompt: plannerJson.image_prompt,
       seedImagePath,
       seedDescription,
+      // Forward image-orchestrator phase events (start / repair / retry /
+      // done / fallback) into SSE phase_message events so the user can
+      // see the LLM-driven prompt-repair retry happen in real time.
+      onPhase: ({ phase, message }) => {
+        const map = {
+          'image.start':    { key: 'phase.image.gen',     fb: message },
+          'image.repair':   { key: 'phase.image.repair',  fb: 'Image model declined — refining prompt…' },
+          'image.retry':    { key: 'phase.image.retry',   fb: 'Retrying with refined prompt…' },
+          'image.done':     { key: 'phase.image.done',    fb: 'Image ready' },
+          'image.fallback': { key: 'phase.image.fallback', fb: 'Image generation failed — using placeholder' },
+        };
+        const m = map[phase] ?? { key: 'phase.image.gen', fb: message };
+        emitPhaseMessage(canvas, jobId, m.key, m.fb);
+      },
     });
     genLog(jobId, 'image',
-      `→ ${imageOutcome.providerName}.${imageOutcome.ext}${imageOutcome.fallback ? ' (fallback)' : ''} (${Date.now() - tImage}ms)`);
+      `→ ${imageOutcome.providerName}.${imageOutcome.ext}${imageOutcome.fallback ? ' (fallback)' : ''}${imageOutcome.repaired ? ' [repaired]' : ''} (${Date.now() - tImage}ms)`);
   } catch (e) {
     broadcast(canvas, {
       type: SseEvents.ERROR, canvasId: canvas.id, jobId,

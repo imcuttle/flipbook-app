@@ -6,6 +6,7 @@ import { paths } from '../store/paths.js';
 import { config } from '../config.js';
 import { log } from '../lib/log.js';
 import { resolveProviderChain } from './providers/index.js';
+import { repairImagePrompt } from './repairPrompt.js';
 
 let cachedSuffix = null;
 async function getStyleSuffix() {
@@ -34,13 +35,24 @@ async function statBigEnough(p, minBytes = 512) {
  * Behaviour:
  *   1. Walk the configured provider chain in order.
  *   2. For each provider where `enabled(config)` is true, call `generate()`.
- *   3. The first one that returns ok and writes a non-trivial file wins.
- *   4. The orchestrator renames the provider's output to `<hash>.png` (or `.svg`
- *      for the svg fallback).
- *   5. If every real provider fails, the always-on `svg` provider produces a
- *      placeholder. The pipeline never returns without a file.
+ *   3. If a provider fails AND the failure carried prose (typical of a
+ *      content-policy refusal), run an LLM-driven prompt repair against
+ *      the prose and retry the SAME provider once with the repaired
+ *      prompt. Only one repair attempt per provider — if that still
+ *      fails we move on.
+ *   4. The first provider that returns ok and writes a non-trivial file
+ *      wins.
+ *   5. The orchestrator renames the provider's output to `<hash>.png`
+ *      (or `.svg` for the svg fallback).
+ *   6. If every real provider fails, the always-on `svg` provider
+ *      produces a placeholder. The pipeline never returns without a file.
+ *
+ * `onPhase` (optional) is called with `{phase, message}` at each user-
+ * facing milestone so the SSE pipeline can stream a status line into the
+ * pending click bubble. Phases: 'image.start', 'image.repair',
+ * 'image.retry', 'image.done', 'image.fallback'.
  */
-export async function generateImage({ canvasId, hash, title, imagePrompt, seedImagePath = null, seedDescription = null, onEvent }) {
+export async function generateImage({ canvasId, hash, title, imagePrompt, seedImagePath = null, seedDescription = null, onEvent, onPhase }) {
   const targetPng = paths.imagePath(canvasId, hash, 'png');
   const dir = path.dirname(targetPng);
   await fs.mkdir(dir, { recursive: true });
@@ -64,7 +76,13 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, seedIm
       prefix += '\n';
     }
   }
-  const finalPrompt = prefix + imagePrompt + suffix;
+  const initialPrompt = prefix + imagePrompt + suffix;
+
+  function emitPhase(phase, message) {
+    try { onPhase?.({ phase, message }); } catch { /* ignore */ }
+  }
+
+  emitPhase('image.start', 'Generating illustration…');
 
   const reasons = [];
   for (const provider of chain()) {
@@ -72,48 +90,86 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, seedIm
       reasons.push(`${provider.name}: disabled (no env/config)`);
       continue;
     }
-    let result;
-    try {
-      result = await provider.generate({
-        imagePrompt: finalPrompt,
-        outputDir: dir,
-        size: config.imageSize,
-        title,
-        hash,
-        seedImagePath,
-        onEvent,
-      });
-    } catch (e) {
-      result = { ok: false, reason: e?.message ?? String(e) };
-    }
 
-    if (!result?.ok || !result.path) {
-      reasons.push(`${provider.name}: ${result?.reason ?? 'no path'}`);
-      log.warn(`[image] ${provider.name} failed: ${result?.reason}`);
-      continue;
-    }
+    // Each provider gets up to two tries: the original prompt, and (if
+    // the first failed with a content-policy-style prose refusal) a
+    // freshly LLM-repaired prompt that addresses the cited reason.
+    let promptForProvider = initialPrompt;
+    let repaired = false;
+    for (let providerAttempt = 1; providerAttempt <= 2; providerAttempt++) {
+      let result;
+      try {
+        result = await provider.generate({
+          imagePrompt: promptForProvider,
+          outputDir: dir,
+          size: config.imageSize,
+          title,
+          hash,
+          seedImagePath: providerAttempt === 1 ? seedImagePath : null, // repair retry drops seed
+          onEvent,
+        });
+      } catch (e) {
+        result = { ok: false, reason: e?.message ?? String(e) };
+      }
 
-    // Rename the produced file to the canonical <hash>.<ext>.
-    const ext = result.path.toLowerCase().endsWith('.svg') ? 'svg' : 'png';
-    const target = paths.imagePath(canvasId, hash, ext);
-    try {
-      if (path.resolve(result.path) !== path.resolve(target)) {
-        await fs.rename(result.path, target);
+      if (result?.ok && result.path) {
+        // Rename the produced file to the canonical <hash>.<ext>.
+        const ext = result.path.toLowerCase().endsWith('.svg') ? 'svg' : 'png';
+        const target = paths.imagePath(canvasId, hash, ext);
+        try {
+          if (path.resolve(result.path) !== path.resolve(target)) {
+            await fs.rename(result.path, target);
+          }
+          if (await statBigEnough(target)) {
+            emitPhase('image.done', repaired ? 'Generated (after refining prompt)' : 'Generated');
+            return {
+              ext,
+              fallback: provider.name === 'svg',
+              providerName: provider.name,
+              repaired,
+            };
+          }
+          reasons.push(`${provider.name}: written file too small`);
+        } catch (e) {
+          reasons.push(`${provider.name}: rename failed: ${e?.message}`);
+        }
+        // If we got here the rename failed or file was too small — break
+        // and try the next provider instead of running the repair.
+        break;
       }
-      if (await statBigEnough(target)) {
-        return {
-          ext,
-          fallback: provider.name === 'svg',
-          providerName: provider.name,
-        };
+
+      reasons.push(`${provider.name} (attempt ${providerAttempt}): ${result?.reason ?? 'no path'}`);
+      log.warn(`[image] ${provider.name} attempt ${providerAttempt} failed: ${result?.reason}`);
+
+      // Decide whether to spend an LLM call repairing the prompt and
+      // retrying the same provider. Conditions:
+      //   * we still have an attempt budget for this provider,
+      //   * the failure carried prose (refusal explanation),
+      //   * we haven't repaired already for this provider.
+      if (providerAttempt < 2 && !repaired && result?.refusalProse) {
+        emitPhase('image.repair',
+          'Image model declined — rewriting the prompt to address its concerns…');
+        const newPrompt = await repairImagePrompt({
+          originalPrompt: promptForProvider,
+          refusalProse: result.refusalProse,
+          seedDescription,
+        });
+        if (newPrompt) {
+          promptForProvider = newPrompt;
+          repaired = true;
+          emitPhase('image.retry', 'Retrying with refined prompt…');
+          continue; // try the same provider again
+        }
+        // No repair available — break out and try the next provider.
+        break;
       }
-      reasons.push(`${provider.name}: written file too small`);
-    } catch (e) {
-      reasons.push(`${provider.name}: rename failed: ${e?.message}`);
+      // Otherwise: no point retrying this provider, move on.
+      break;
     }
   }
 
   // Belt-and-suspenders: if even the svg fallback couldn't write, synthesise one inline.
+  emitPhase('image.fallback', 'All providers failed — using placeholder');
   const svgPath = paths.imagePath(canvasId, hash, 'svg');
   await writeFallbackSvg(svgPath, { title, hash });
   return {
