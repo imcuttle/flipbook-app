@@ -71,7 +71,14 @@ export function TopBar(props: Props) {
 
   const onFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const sel = selectionFromFileList(e.target.files);
-    if (sel) onAttachmentChange(sel);
+    if (sel) {
+      onAttachmentChange(sel);
+      // Defer focus to the next frame: focusing synchronously inside the
+      // file-input change handler can stall the picker teardown. rAF lets
+      // the input dialog fully close first, then we move the caret to the
+      // topic field so the user can type / submit immediately.
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
     // Reset so the same file can be picked again after removal.
     e.target.value = '';
   };
