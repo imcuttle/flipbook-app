@@ -66,6 +66,26 @@ function emitPhaseMessage(canvas, jobId, messageKey, messageEn, extra = {}) {
 
 function clickKey(canvasId, parentHash) { return `${canvasId}::${parentHash}`; }
 
+// Broadcast a localised, warn-level "your uploaded image was dropped for
+// compliance reasons" toast (generation continues without the seed). The
+// model's own (often English) refusal reason is appended, truncated.
+function emitComplianceToast(canvas, jobId, lang, refusalProse) {
+  const reason = String(refusalProse || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+  const message = lang === 'en'
+    ? (reason
+        ? `Your uploaded image was declined (likely an identifiable person / content-policy issue): ${reason} — generating from the topic text instead.`
+        : 'Your uploaded image was declined (likely an identifiable person / content-policy issue) — generating from the topic text instead.')
+    : (reason
+        ? `上传图片被拒绝(可能含可识别真人或涉及内容合规):${reason} — 已改为根据主题文字生成。`
+        : '上传图片被拒绝(可能含可识别真人或涉及内容合规) — 已改为根据主题文字生成。');
+  try {
+    broadcast(canvas, {
+      type: SseEvents.ERROR, canvasId: canvas.id, jobId,
+      phase: 'image', code: 'seed_refused', message, recoverable: true,
+    });
+  } catch { /* logged in hub */ }
+}
+
 export function clickQueueStatus(canvasId, parentHash) {
   const k = clickKey(canvasId, parentHash);
   return {
@@ -278,6 +298,10 @@ async function buildAndRegisterNode({
   genLog(jobId, 'planner', `topic="${effectiveSubject}" sources=${sources.length}`);
   emitPhaseMessage(canvas, jobId, 'phase.planner', 'Drafting title, caption and scene…');
   let plannerJson;
+  // When a seed image trips a content-policy refusal we drop it and retry
+  // text-only; these track the effective (possibly seed-dropped) values.
+  let effectiveSeedPath = seedImagePath;
+  let effectiveSeedDescription = seedDescription;
   try {
     plannerJson = await plannerCall({
       topic: effectiveSubject,
@@ -293,25 +317,67 @@ async function buildAndRegisterNode({
     genLog(jobId, 'planner',
       `→ "${plannerJson.title}" (caption ${plannerJson.caption.length}c, image_prompt ${plannerJson.image_prompt.length}c, ${Date.now() - tPlanner}ms)`);
   } catch (e) {
-    // Refusals (model returned prose / content-policy decline) come
-    // back as PlannerRefusalError with the prose carried as the message.
-    // Surface it as a non-recoverable planner-phase error so the UI
-    // toast is the model's own explanation, not a stack-trace summary.
     const isRefusal = e instanceof PlannerRefusalError;
-    broadcast(canvas, {
-      type: SseEvents.ERROR, canvasId: canvas.id, jobId,
-      phase: 'plan',
-      message: isRefusal ? e.message : String(e?.message || e),
-      code: isRefusal ? 'planner_refusal' : 'planner_error',
-      recoverable: false,
-    });
-    if (isRefusal) {
-      log.warn(`[gen ${jobId}] planner refusal: ${e.message.slice(0, 200)}`);
+    // Compliance fallback: when a SEED IMAGE was attached and the planner
+    // refused (typically "image contains an identifiable real person /
+    // privacy"), the refusal is about the UPLOADED IMAGE, not the topic.
+    // Retry the planner WITHOUT the seed image (and without the image-
+    // derived description) so we still produce a text-driven encyclopedia
+    // page. Warn the user their image was dropped for compliance reasons.
+    if (isRefusal && seedImagePath) {
+      genLog(jobId, 'planner.seed_refused', 'planner refused with seed — retrying text-only');
+      emitComplianceToast(canvas, jobId, lang, e.message);
+      try {
+        const fallbackTopic = (effectiveSubject && effectiveSubject !== '__pending__')
+          ? effectiveSubject
+          : (canvas.topic && canvas.topic !== '__pending__' ? canvas.topic : (currentLabel || ''));
+        plannerJson = await plannerCall({
+          topic: fallbackTopic,
+          path: parentNode?.path ?? [],
+          currentLabel: currentLabel ?? '',
+          depth,
+          maxDepth: 99,
+          sources,
+          seedImagePath: null,
+          seedDescription: null,
+          lang,
+        });
+        effectiveSeedPath = null;
+        effectiveSeedDescription = null;
+        genLog(jobId, 'planner.seed_refused',
+          `→ text-only OK "${plannerJson.title}" (${Date.now() - tPlanner}ms)`);
+      } catch (e2) {
+        // Even the text-only retry failed — surface and abort.
+        const isRefusal2 = e2 instanceof PlannerRefusalError;
+        broadcast(canvas, {
+          type: SseEvents.ERROR, canvasId: canvas.id, jobId,
+          phase: 'plan',
+          message: isRefusal2 ? e2.message : String(e2?.message || e2),
+          code: isRefusal2 ? 'planner_refusal' : 'planner_error',
+          recoverable: false,
+        });
+        log.warn(`[gen ${jobId}] planner text-only retry failed: ${e2?.message}`);
+        throw e2;
+      }
     } else {
-      log.error(`[gen ${jobId}] planner error:`, e?.stack || e);
+      broadcast(canvas, {
+        type: SseEvents.ERROR, canvasId: canvas.id, jobId,
+        phase: 'plan',
+        message: isRefusal ? e.message : String(e?.message || e),
+        code: isRefusal ? 'planner_refusal' : 'planner_error',
+        recoverable: false,
+      });
+      if (isRefusal) {
+        log.warn(`[gen ${jobId}] planner refusal: ${e.message.slice(0, 200)}`);
+      } else {
+        log.error(`[gen ${jobId}] planner error:`, e?.stack || e);
+      }
+      throw e;
     }
-    throw e;
   }
+  // From here on, use the (possibly seed-dropped) effective values.
+  seedImagePath = effectiveSeedPath;
+  seedDescription = effectiveSeedDescription;
 
   const parentHash = parentNode?.hash ?? '';
   const hash = hashNode(parentHash, hashSeed, plannerJson.image_prompt);
@@ -765,6 +831,10 @@ export function enqueueRootGeneration(canvas, opts = {}) {
   const webSearchEnabled = opts.webSearchEnabled !== false; // default on
   const seedImagePath = opts.seedImagePath ?? null;
   const lang = opts.lang ?? 'zh';
+  // Whether a failure should delete the whole canvas. True for fresh
+  // creation (an empty shell is useless), false for regenerate (the
+  // flipbook already exists — a failed re-roll should leave it intact).
+  const deleteOnFailure = opts.deleteOnFailure !== false;
   genLog(jobId, 'enqueue.root',
     `canvas=${canvas.id} topic="${canvas.topic}"${seedImagePath ? ' (seeded)' : ''}`);
   canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled, seedImagePath, lang }).catch(async (e) => {
@@ -773,10 +843,14 @@ export function enqueueRootGeneration(canvas, opts = {}) {
     } else {
       log.error(`[gen ${jobId}] generateRootNode failed:`, e?.stack || e);
     }
-    // The root node never materialised, so this canvas is an empty shell
-    // (no cover, no nodes). Delete it entirely rather than leaving a dead
-    // "生成中…" card in the gallery. The gen_error SSE has already been
-    // broadcast to the open client with the failure reason.
+    if (!deleteOnFailure) {
+      genLog(jobId, 'root.failed', `regenerate failed — keeping canvas ${canvas.id}`);
+      return;
+    }
+    // Fresh-creation failure: the root node never materialised, so this
+    // canvas is an empty shell (no cover, no nodes). Delete it entirely
+    // rather than leaving a dead "生成中…" card in the gallery. The
+    // gen_error SSE has already been broadcast to the open client.
     try {
       await deleteCanvas(canvas.id);
       genLog(jobId, 'root.failed', `deleted empty canvas ${canvas.id}`);

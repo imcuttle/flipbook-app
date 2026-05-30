@@ -57,6 +57,10 @@ export async function regenerateNode(canvas, hash, opts = {}) {
       webSearchEnabled,
       seedImagePath: node.gen_inputs?.seed_image ?? node.seed_image ?? null,
       lang: opts.lang ?? 'zh',
+      // Regenerate must NOT delete the whole canvas on failure — this is an
+      // existing flipbook the user is re-rolling, not a fresh creation. If
+      // the re-roll fails the canvas stays (empty root), the user can retry.
+      deleteOnFailure: false,
     });
     return { ok: true, deletedHashes: [hash, ...childHashes], parentHash: null };
   }

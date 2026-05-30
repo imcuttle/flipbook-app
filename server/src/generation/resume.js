@@ -60,7 +60,9 @@ export async function resumeIncomplete(canvas) {
       // but we duplicate the cleanup here for the live-resume path.
       // (The simpler thing: just enqueue and let the cache hit if the
       // node actually IS complete.)
-      enqueueRootGeneration(canvas, {});
+      // Resume must not delete the canvas on failure — it's an existing
+      // (interrupted) flipbook, not a fresh creation.
+      enqueueRootGeneration(canvas, { deleteOnFailure: false });
       resumed++;
     }
 

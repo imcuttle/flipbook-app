@@ -435,6 +435,20 @@ function applySse(state: AppState, evt: SseEvent): AppState {
         : { id, level: 'error', message: msg };
       let s: AppState = { ...state, toasts: [...state.toasts, next].slice(-5) };
       s = dropPending(s, evt.jobId);
+      // Root-generation failure: the planner failed for a canvas that has no
+      // rendered node yet (fresh creation). The server deletes the empty
+      // canvas, so the client must leave the dead "生成中…" view and return
+      // to the gallery rather than spinning forever.
+      if (evt.phase === 'plan' && !s.currentHash) {
+        s = {
+          ...s,
+          view: 'gallery',
+          canvasId: null,
+          topic: null,
+          rootHash: null,
+          tree: null,
+        };
+      }
       return s;
     }
 
