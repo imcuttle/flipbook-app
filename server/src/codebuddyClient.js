@@ -303,35 +303,50 @@ export async function callImageGen({
   // and subject carry over) or ImageGen (text-to-image, no seed).
   // Both tools accept output_dir + return their actual filename via
   // tool_result; we capture it from the SSE event.
-  const userMessage = seedImagePath
-    ? [
-        'Use the ImageEdit tool exactly once with the parameters below via DeferExecuteTool.',
-        'After the tool returns, reply with a single word "OK" and nothing else.',
-        '',
-        'Tool name: ImageEdit',
-        `prompt: ${imagePrompt}`,
-        `image: ${seedImagePath}`,
-        `size: ${size}`,
-        `output_dir: ${outputDir}`,
-      ].join('\n')
-    : [
-        'Use the ImageGen tool exactly once with the parameters below via DeferExecuteTool.',
-        'After the tool returns, reply with a single word "OK" and nothing else.',
-        '',
-        'Tool name: ImageGen',
-        `prompt: ${imagePrompt}`,
-        `size: ${size}`,
-        `output_dir: ${outputDir}`,
-      ].join('\n');
+  function buildUserMessage(seed) {
+    return seed
+      ? [
+          'Use the ImageEdit tool exactly once with the parameters below via DeferExecuteTool.',
+          'After the tool returns, reply with a single word "OK" and nothing else.',
+          '',
+          'Tool name: ImageEdit',
+          `prompt: ${imagePrompt}`,
+          `image: ${seed}`,
+          `size: ${size}`,
+          `output_dir: ${outputDir}`,
+        ].join('\n')
+      : [
+          'Use the ImageGen tool exactly once with the parameters below via DeferExecuteTool.',
+          'After the tool returns, reply with a single word "OK" and nothing else.',
+          '',
+          'Tool name: ImageGen',
+          `prompt: ${imagePrompt}`,
+          `size: ${size}`,
+          `output_dir: ${outputDir}`,
+        ].join('\n');
+  }
 
-  // Captured by onEvent: the path the tool actually wrote.
+  // Captured by onEvent: the path the tool actually wrote, plus a copy of
+  // the assistant's prose reply (when the model declines to invoke the
+  // tool, the prose carries the reason — useful for both logging and the
+  // seed-fallback decision below).
   let capturedPath = null;
+  let assistantProse = '';
 
   return sem.run(async () => {
     let lastErr;
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    // Up to 3 attempts: 1) ImageEdit with seed (when provided),
+    // 2) retry the same, 3) DOWNGRADE to ImageGen without seed when the
+    // first two failed and we had a seed (model often refuses ImageEdit
+    // on sensitive imagery — text-to-image of the planner's vivid
+    // description still produces a usable result).
+    const maxAttempts = seedImagePath ? 3 : 2;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const useSeed = seedImagePath && attempt < 3;
+      const userMessage = buildUserMessage(useSeed ? seedImagePath : null);
       try {
         capturedPath = null;
+        assistantProse = '';
         const frame = JSON.stringify({
           type: 'user',
           message: { role: 'user', content: userMessage },
@@ -349,6 +364,15 @@ export async function callImageGen({
             let evt;
             try { evt = JSON.parse(line); } catch { return; }
             if (onEvent) { try { onEvent(evt); } catch {} }
+            // Capture the assistant's text reply (when the model declines
+            // the tool call, the reason ends up here).
+            if (evt?.type === 'assistant' && Array.isArray(evt?.message?.content)) {
+              for (const c of evt.message.content) {
+                if (c?.type === 'text' && typeof c.text === 'string') {
+                  assistantProse += (assistantProse ? '\n' : '') + c.text;
+                }
+              }
+            }
             // Look for tool_result with image-tool result payload (both
             // ImageGen and ImageEdit emit a similar shape — `type` differs
             // but `images[].localPath` is consistent).
@@ -385,7 +409,12 @@ export async function callImageGen({
           : 'tool did not return localPath');
       } catch (e) {
         lastErr = e;
-        log.warn(`callImageGen attempt ${attempt} failed:`, e?.message);
+        const proseSummary = assistantProse
+          ? ` | model prose: "${assistantProse.replace(/\s+/g, ' ').slice(0, 200)}"`
+          : '';
+        log.warn(`callImageGen attempt ${attempt} (${useSeed ? 'edit' : 'gen'}) failed: ${e?.message}${proseSummary}`);
+        // If this attempt was image-edit and failed, attempt 3 will fall
+        // through to text-to-image without the seed.
       }
     }
     return { ok: false, reason: lastErr?.message ?? 'image generation failed' };
