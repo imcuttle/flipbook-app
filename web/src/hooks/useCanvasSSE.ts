@@ -26,7 +26,10 @@ export function useCanvasSSE(canvasId: string | null, onEvent: (evt: SseEvent) =
         'ocr_done',
         'node_ready', 'tree_updated',
         'click_rejected', 'node_deleted',
-        'error', 'done',
+        // 'gen_error' (renamed from 'error' on the server) — addEventListener
+        // for 'error' would otherwise collide with EventSource's built-in
+        // connection-error event and silently drop our typed payload.
+        'gen_error', 'done',
       ];
       for (const t of types) {
         es.addEventListener(t, (e: MessageEvent) => {

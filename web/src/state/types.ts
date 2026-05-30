@@ -62,7 +62,7 @@ export type SseEvent =
   | { type: 'ocr_done'; canvasId: string; jobId: string; hash: string; spanCount: number }
   | { type: 'node_ready'; canvasId: string; jobId: string; hash: string; node: Node }
   | { type: 'tree_updated'; canvasId: string; jobId: string; treeNodeCount: number }
-  | { type: 'error'; canvasId: string; jobId: string; phase: 'plan' | 'image' | 'register'; message: string; recoverable: boolean; code?: string }
+  | { type: 'gen_error'; canvasId: string; jobId: string; phase: 'plan' | 'image' | 'register'; message: string; recoverable: boolean; code?: string }
   | { type: 'click_rejected'; canvasId: string; jobId: string; parentHash: string; clickXY: [number, number]; reason: string }
   | { type: 'node_deleted'; canvasId: string; hash: string; deletedHashes: string[]; parentHash: string | null }
   | { type: 'done'; canvasId: string; jobId: string; hash: string; cacheHit: boolean };

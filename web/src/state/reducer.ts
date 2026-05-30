@@ -325,7 +325,7 @@ function applySse(state: AppState, evt: SseEvent): AppState {
       return { ...state, nodes, tree, currentHash, rootHash };
     }
 
-    case 'error': {
+    case 'gen_error': {
       const id = _toastId++;
       // Refusals (model declined to plan, e.g. content-policy) come through
       // as code=planner_refusal. Show the model's prose verbatim at warn

@@ -9,7 +9,10 @@ export const SseEvents = Object.freeze({
   OCR_DONE: 'ocr_done',
   NODE_READY: 'node_ready',
   TREE_UPDATED: 'tree_updated',
-  ERROR: 'error',
+  // Renamed from 'error' to 'gen_error' so addEventListener('error') in the
+  // browser doesn't collide with EventSource's built-in connection-error
+  // event (which would otherwise eat or double-fire our payload).
+  ERROR: 'gen_error',
   DONE: 'done',
   // The click-label LLM decided the click didn't land on anything drillable.
   // Frontend drops the pending bubble and toasts the reason.
