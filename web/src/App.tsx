@@ -48,6 +48,12 @@ export default function App() {
   // Image attached to the gallery topic input (used for image-seeded
   // canvas creation). Cleared on successful submit or via the X button.
   const [topicAttachment, setTopicAttachment] = useState<ImageSelection | null>(null);
+  // Local "POST in flight" flag. Spans the gap between the user clicking
+  // Generate and the server's createCanvas response — `state.status.busy`
+  // flips on later (after the first SSE event), so without this guard
+  // double-clicking Generate during multipart upload would fire multiple
+  // POSTs.
+  const [submitting, setSubmitting] = useState(false);
   // Whether long-press should open the floating compose panel (default ON)
   // or fire generate immediately (legacy behaviour).
   const [composeOnClick, setComposeOnClick] = useState(true);
@@ -220,6 +226,8 @@ export default function App() {
     // Either a topic, an attached image, or both — server will accept any.
     if (!topic && !topicAttachment) return;
     if (state.readOnly) return;
+    if (submitting) return; // dedupe: POST already in flight
+    setSubmitting(true);
     try {
       const { canvasId } = await createCanvas(topic, {
         webSearch: state.webSearch,
@@ -231,8 +239,10 @@ export default function App() {
       setTopicAttachment(null);
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Create failed: ${(e as Error).message}` } });
+    } finally {
+      setSubmitting(false);
     }
-  }, [draftTopic, state.readOnly, state.webSearch, topicAttachment]);
+  }, [draftTopic, state.readOnly, state.webSearch, topicAttachment, submitting]);
 
   const onImageClick = useCallback(async (xy: [number, number]) => {
     if (state.readOnly) return;
@@ -502,7 +512,16 @@ export default function App() {
   }, []);
 
   const currentNode = state.currentHash ? state.nodes[state.currentHash] : null;
-  const busy = state.status.phase === 'planning' || state.status.phase === 'image_loading';
+  // `busy` covers two distinct in-flight states:
+  //   1. `submitting` — local POST hasn't returned yet (the multipart
+  //      upload is still streaming over the wire).
+  //   2. status.phase planning/image_loading — server has accepted the
+  //      job and the SSE pipeline is mid-generation.
+  // Either should disable the Generate button so the user can't fire a
+  // duplicate submission.
+  const busy = submitting
+    || state.status.phase === 'planning'
+    || state.status.phase === 'image_loading';
   const imageLoadingForCurrent =
     state.status.phase === 'image_loading' && state.status.hash === currentNode?.hash;
 
