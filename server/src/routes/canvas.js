@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCanvas, getCanvas, listCanvases } from '../store/canvasStore.js';
+import { createCanvas, getCanvas, listCanvases, deleteCanvas } from '../store/canvasStore.js';
 import { readTree } from '../store/treeStore.js';
 import { isSafeId } from '../store/paths.js';
 import { enqueueRootGeneration } from '../generation/pipeline.js';
@@ -93,6 +93,35 @@ canvasRouter.get('/:id/tree', async (req, res) => {
     res.json(tree);
   } catch {
     res.status(404).json({ error: 'not_found' });
+  }
+});
+
+// Bulk-delete canvases. Body: { ids: string[] }. Each id is validated;
+// invalid ids are skipped. Returns { deleted: string[] }. Used by the
+// gallery's edit-mode multi-select delete.
+canvasRouter.post('/delete', async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  const valid = ids.filter((x) => typeof x === 'string' && isSafeId(x)).slice(0, 200);
+  const deleted = [];
+  for (const id of valid) {
+    try {
+      await deleteCanvas(id);
+      deleted.push(id);
+    } catch { /* skip individual failures */ }
+  }
+  res.json({ deleted });
+});
+
+// Delete a single canvas.
+canvasRouter.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
+  try {
+    const removed = await deleteCanvas(id);
+    if (!removed) return res.status(404).json({ error: 'not_found' });
+    res.json({ deleted: [id] });
+  } catch (e) {
+    res.status(500).json({ error: 'delete_failed', message: e?.message });
   }
 });
 

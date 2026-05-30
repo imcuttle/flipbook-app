@@ -5,7 +5,7 @@ import { paths } from './paths.js';
 import { writeJsonAtomic } from './treeStore.js';
 import { slugify } from '../lib/slug.js';
 import { PerCanvasQueue } from '../generation/queue.js';
-import { upsertCanvasMeta, touchCanvas, listCanvasesFromDb, countCanvases } from '../db/repo.js';
+import { upsertCanvasMeta, touchCanvas, listCanvasesFromDb, countCanvases, deleteCanvasFromDb } from '../db/repo.js';
 
 // In-memory runtime registry. Disk is the source of truth for "what canvases exist".
 // Memory is the source of truth for "who is listening" and "what jobs are queued".
@@ -105,6 +105,28 @@ export async function getCanvas(id) {
   };
   runtimes.set(id, runtime);
   return runtime;
+}
+
+// Delete an entire canvas: DB rows, the in-memory runtime, and the
+// on-disk directory (nodes, images, uploads, manifest, tree). Returns
+// true if a directory was found and removed. Idempotent — deleting a
+// non-existent canvas resolves false rather than throwing.
+export async function deleteCanvas(id) {
+  // Drop the in-memory runtime first so no new SSE writes / jobs target it.
+  const rt = runtimes.get(id);
+  if (rt?.sseClients) {
+    for (const res of rt.sseClients) {
+      try { res.end(); } catch { /* ignore */ }
+    }
+  }
+  runtimes.delete(id);
+  try { await deleteCanvasFromDb(id); } catch { /* best effort */ }
+  let removed = false;
+  try {
+    await fs.rm(paths.canvasDir(id), { recursive: true, force: true });
+    removed = true;
+  } catch { /* ignore */ }
+  return removed;
 }
 
 export async function touchLastRun(id) {

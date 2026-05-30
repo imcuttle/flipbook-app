@@ -421,23 +421,14 @@ async function buildAndRegisterNode({
   await registerNode(canvas.id, node);
   await touchLastRun(canvas.id);
 
-  // Keep the canvas's gallery-displayed topic in sync with the planner's
-  // root-node title. Two cases need this:
-  //   1. Image-only uploads — canvas was created with sentinel '__pending__'.
-  //   2. Image + user topic — the planner's inferred subject is usually
-  //      more specific than the user's loose topic, and a mismatch between
-  //      the gallery card title and the canvas's actual node title is
-  //      confusing. Sync only on the FIRST root build (when canvas.topic
-  //      is still '__pending__' OR when this is a brand-new canvas with
-  //      a seed image) — subsequent regenerates leave the topic alone so
-  //      the user's curated rename isn't blown away.
-  if (!parentNode && plannerJson.title) {
-    const isPending = canvas.topic === '__pending__';
-    const isFirstRootForSeed = !!seedImagePath && !canvas.__rootTitled;
-    if (isPending || isFirstRootForSeed) {
-      await updateCanvasTopic(canvas.id, plannerJson.title);
-      canvas.__rootTitled = true;
-    }
+  // Keep the canvas's gallery-displayed topic identical to the root
+  // node's title. The gallery card and the canvas's root page should
+  // never show different strings for the same flipbook. We sync on every
+  // root build (initial generation + any root regenerate), so the card
+  // always reflects the current root title.
+  if (!parentNode && plannerJson.title && plannerJson.title !== canvas.topic) {
+    await updateCanvasTopic(canvas.id, plannerJson.title);
+    canvas.__rootTitled = true;
   }
 
   try {

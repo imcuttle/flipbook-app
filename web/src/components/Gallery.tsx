@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from '../styles/Gallery.module.css';
 import type { GalleryEntry } from '../state/types';
-import { listCanvasesPage } from '../lib/api';
+import { listCanvasesPage, deleteCanvases } from '../lib/api';
 import { useLang, t, format, displayTopic } from '../lib/i18n';
 import type { Lang } from '../lib/i18n';
+import { ConfirmModal } from './ConfirmModal';
 
 type Props = {
   onOpen: (canvasId: string) => void;
@@ -32,6 +33,13 @@ export function Gallery({ onOpen, refreshKey }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [lang] = useLang();
 
+  // Edit mode: when on, cards become multi-selectable (checkbox overlay)
+  // and a delete bar appears. Selection is a Set of canvasIds.
+  const [editMode, setEditMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   // Sentinel ref — IntersectionObserver triggers loadMore when this scrolls
   // into view. Re-bound on every render via the callback ref pattern so it
   // works after the entries list grows and React re-mounts the sentinel.
@@ -50,6 +58,9 @@ export function Gallery({ onOpen, refreshKey }: Props) {
     setHasMore(true);
     setError(null);
     setLoading(true);
+    // Leaving/refreshing the gallery exits edit mode and clears selection.
+    setEditMode(false);
+    setSelected(new Set());
     listCanvasesPage(PAGE_SIZE, 0, null, ctrl.signal)
       .then((page) => {
         if (ctrl.signal.aborted) return;
@@ -113,6 +124,46 @@ export function Gallery({ onOpen, refreshKey }: Props) {
     observerRef.current.observe(node);
   }, [loadMore]);
 
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelected(new Set(entries.map((e) => e.canvasId)));
+  }, [entries]);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
+  const exitEditMode = useCallback(() => {
+    setEditMode(false);
+    setSelected(new Set());
+  }, []);
+
+  const doDelete = useCallback(async () => {
+    const ids = [...selected];
+    if (ids.length === 0) { setConfirmOpen(false); return; }
+    setDeleting(true);
+    try {
+      const { deleted } = await deleteCanvases(ids);
+      const gone = new Set(deleted);
+      setEntries((prev) => prev.filter((e) => !gone.has(e.canvasId)));
+      setTotal((prev) => Math.max(0, prev - deleted.length));
+      setSelected(new Set());
+      setConfirmOpen(false);
+      setEditMode(false);
+    } catch (e) {
+      setError((e as Error).message);
+      setConfirmOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  }, [selected]);
+
   if (loading) {
     return (
       <div className={styles.gallery}>
@@ -130,12 +181,44 @@ export function Gallery({ onOpen, refreshKey }: Props) {
   }
 
   const countKey = total === 1 ? 'gallery.count.one' : 'gallery.count.many';
+  const selectedCount = selected.size;
 
   return (
     <div className={styles.gallery}>
       <div className={styles.header}>
-        <h2 className={styles.title}>{t('gallery.title', lang)}</h2>
-        <span className={styles.count}>{format(t(countKey, lang), { n: total })}</span>
+        <div className={styles.headerLeft}>
+          <h2 className={styles.title}>{t('gallery.title', lang)}</h2>
+          <span className={styles.count}>{format(t(countKey, lang), { n: total })}</span>
+        </div>
+        {entries.length > 0 && (
+          <div className={styles.headerActions}>
+            {editMode ? (
+              <>
+                <button type="button" className={styles.editBtn} onClick={selectAll}>
+                  {t('gallery.edit.selectAll', lang)}
+                </button>
+                <button type="button" className={styles.editBtn} onClick={clearSelection}>
+                  {t('gallery.edit.clear', lang)}
+                </button>
+                <button
+                  type="button"
+                  className={styles.deleteBtn}
+                  disabled={selectedCount === 0 || deleting}
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  {format(t('gallery.edit.delete', lang), { n: selectedCount })}
+                </button>
+                <button type="button" className={styles.editBtn} onClick={exitEditMode}>
+                  {t('gallery.edit.done', lang)}
+                </button>
+              </>
+            ) : (
+              <button type="button" className={styles.editBtn} onClick={() => setEditMode(true)}>
+                {t('gallery.edit', lang)}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {entries.length === 0 ? (
@@ -149,14 +232,20 @@ export function Gallery({ onOpen, refreshKey }: Props) {
             {entries.map((e) => {
               const nodeKey = e.nodeCount === 1 ? 'gallery.nodes.one' : 'gallery.nodes.many';
               const shownTopic = displayTopic(e.topic, lang);
+              const isSelected = selected.has(e.canvasId);
               return (
                 <button
                   key={e.canvasId}
                   type="button"
-                  className={styles.card}
-                  onClick={() => onOpen(e.canvasId)}
+                  className={`${styles.card} ${editMode && isSelected ? styles.cardSelected : ''}`}
+                  onClick={() => (editMode ? toggleSelect(e.canvasId) : onOpen(e.canvasId))}
                   title={shownTopic}
                 >
+                  {editMode && (
+                    <span className={`${styles.checkbox} ${isSelected ? styles.checkboxOn : ''}`} aria-hidden>
+                      {isSelected ? '✓' : ''}
+                    </span>
+                  )}
                   {e.coverImage ? (
                     <img className={styles.cover} src={e.coverImage} alt={shownTopic} draggable={false} />
                   ) : (
@@ -183,6 +272,17 @@ export function Gallery({ onOpen, refreshKey }: Props) {
           )}
         </>
       )}
+
+      <ConfirmModal
+        open={confirmOpen}
+        title={t('gallery.edit.confirm.title', lang)}
+        body={format(t('gallery.edit.confirm.body', lang), { n: selectedCount })}
+        confirmLabel={t('gallery.edit.confirm.ok', lang)}
+        cancelLabel={t('gallery.edit.confirm.cancel', lang)}
+        destructive
+        onConfirm={doDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

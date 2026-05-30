@@ -282,3 +282,17 @@ export async function deleteNodesFromDb(canvasId, hashes) {
     await Canvas.update(patch, { where: { canvasId } });
   }
 }
+
+// Delete an entire canvas and all its dependent rows from the DB.
+// Filesystem cleanup is the caller's responsibility. Idempotent.
+export async function deleteCanvasFromDb(canvasId) {
+  const { Canvas, Node, Hotspot, Source, TextSpan, ShareLink } = models();
+  await Promise.all([
+    Node.destroy({ where: { canvasId } }),
+    Hotspot.destroy({ where: { canvasId } }),
+    Source.destroy({ where: { canvasId } }),
+    TextSpan.destroy({ where: { canvasId } }),
+    ShareLink.destroy({ where: { canvasId } }),
+  ]);
+  await Canvas.destroy({ where: { canvasId } });
+}

@@ -104,6 +104,20 @@ export async function getNode(canvasId: string, hash: string): Promise<Node> {
   return res.json();
 }
 
+// Bulk-delete whole canvases (gallery edit-mode multi-select).
+export async function deleteCanvases(ids: string[]): Promise<{ deleted: string[] }> {
+  const res = await fetch(`${API}/canvas/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`deleteCanvases failed: ${res.status} ${txt}`);
+  }
+  return res.json();
+}
+
 export async function getTree(canvasId: string): Promise<Tree> {
   const res = await fetch(`${API}/canvas/${canvasId}/tree`);
   if (!res.ok) throw new Error(`getTree failed: ${res.status}`);

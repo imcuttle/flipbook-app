@@ -192,6 +192,16 @@ export const messages: Catalogue = {
   'gallery.cover.generating': { zh: '生成中…', en: 'generating…' },
   'gallery.nodes.one': { zh: '{n} 张画布', en: '{n} node' },
   'gallery.nodes.many': { zh: '{n} 张画布', en: '{n} nodes' },
+  'gallery.edit': { zh: '编辑', en: 'Edit' },
+  'gallery.edit.done': { zh: '完成', en: 'Done' },
+  'gallery.edit.selectAll': { zh: '全选', en: 'Select all' },
+  'gallery.edit.clear': { zh: '取消选择', en: 'Clear' },
+  'gallery.edit.delete': { zh: '删除选中 ({n})', en: 'Delete ({n})' },
+  'gallery.edit.confirm.title': { zh: '确认删除选中画册?', en: 'Delete selected flipbooks?' },
+  'gallery.edit.confirm.body': { zh: '将永久删除 {n} 个画册及其所有节点和图片,无法恢复。', en: 'This permanently deletes {n} flipbook(s) with all their nodes and images. This cannot be undone.' },
+  'gallery.edit.confirm.ok': { zh: '删除', en: 'Delete' },
+  'gallery.edit.confirm.cancel': { zh: '取消', en: 'Cancel' },
+  'gallery.edit.deleted': { zh: '已删除 {n} 个画册', en: 'Deleted {n} flipbook(s)' },
 
   // Relative time
   'time.justNow': { zh: '刚刚', en: 'just now' },

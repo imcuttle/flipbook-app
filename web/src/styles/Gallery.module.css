@@ -9,9 +9,53 @@
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 12px;
   padding: 0 4px;
 }
+
+.headerLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editBtn {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 120ms;
+}
+
+.editBtn:hover { background: var(--bg); }
+
+.deleteBtn {
+  font: inherit;
+  font-size: 13px;
+  color: #fff;
+  background: #c0392b;
+  border: 1px solid #a93226;
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+
+.deleteBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+.deleteBtn:not(:disabled):hover { background: #a93226; }
 
 .title {
   font-size: 22px;
@@ -31,6 +75,7 @@
 }
 
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--paper);
@@ -48,6 +93,34 @@
 .card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.cardSelected {
+  border-color: var(--accent, #c0392b);
+  box-shadow: 0 0 0 2px var(--accent, #c0392b) inset;
+}
+
+.checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.checkboxOn {
+  background: #c0392b;
+  border-color: #a93226;
 }
 
 .cover {
@@ -80,9 +153,16 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--ink);
-  white-space: nowrap;
+  /* Long root titles wrap to at most two lines, then ellipsize — so a
+     verbose planner title doesn't blow out the card height or overlap
+     the meta row. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .cardMeta {
