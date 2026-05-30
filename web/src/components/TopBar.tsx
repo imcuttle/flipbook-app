@@ -4,6 +4,8 @@ import type { Node } from '../state/types';
 import { useLang, t, displayTopic } from '../lib/i18n';
 import { Icon } from './Icon';
 import { selectionFromClipboard, selectionFromFileList, type ImageSelection } from '../lib/imageUpload';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { BottomSheet } from './BottomSheet';
 
 type Props = {
   view: 'gallery' | 'canvas';
@@ -254,6 +256,7 @@ function MoreMenu({
 }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!open) return;
@@ -271,6 +274,118 @@ function MoreMenu({
     };
   }, [open]);
 
+  // Shared menu rows — rendered into the desktop dropdown or the mobile
+  // bottom sheet depending on viewport.
+  const menuItems = (
+    <>
+      {onRegenerate && (
+        <>
+          <button
+            type="button"
+            className={styles.moreItem}
+            role="menuitem"
+            onClick={() => { onRegenerate(); setOpen(false); }}
+          >
+            <Icon name="regenerate" size={14} />
+            <span className={styles.moreItemLabel}>{t('topbar.regenerate', lang)}</span>
+            {regenerateInfo && !isMobile && (
+              <span
+                className={styles.moreInfo}
+                role="img"
+                aria-label={t('topbar.regenerate.info', lang)}
+                tabIndex={0}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Icon name="info" size={12} />
+                <span className={styles.moreInfoPop} role="tooltip">
+                  <span className={styles.moreInfoRow}>
+                    <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.topic', lang)}</span>
+                    <span className={styles.moreInfoVal}>{displayTopic(regenerateInfo.topic, lang) || t('topbar.regenerate.input.none', lang)}</span>
+                  </span>
+                  <span className={styles.moreInfoRow}>
+                    <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.label', lang)}</span>
+                    <span className={styles.moreInfoVal}>{regenerateInfo.clickLabel || t('topbar.regenerate.input.none', lang)}</span>
+                  </span>
+                  {regenerateInfo.clickXY && (
+                    <span className={styles.moreInfoRow}>
+                      <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.click', lang)}</span>
+                      <span className={styles.moreInfoVal}>
+                        {regenerateInfo.clickXY[0].toFixed(2)}, {regenerateInfo.clickXY[1].toFixed(2)}
+                      </span>
+                    </span>
+                  )}
+                  <span className={styles.moreInfoRow}>
+                    <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.image', lang)}</span>
+                    <span className={styles.moreInfoVal}>
+                      {regenerateInfo.hasSeedImage ? '✓' : t('topbar.regenerate.input.none', lang)}
+                    </span>
+                  </span>
+                </span>
+              </span>
+            )}
+          </button>
+          <div className={styles.moreSep} aria-hidden />
+        </>
+      )}
+      {onToggleComposeOnClick && (
+        <button
+          type="button"
+          className={`${styles.moreItem} ${composeOnClick ? styles.moreItemOn : ''}`}
+          role="menuitemcheckbox"
+          aria-checked={composeOnClick}
+          onClick={() => { onToggleComposeOnClick(); setOpen(false); }}
+        >
+          {/* Icon stays constant — on/off is shown by the row's tint
+              + ◆ marker, not by swapping glyphs. */}
+          <Icon name="long-press" size={14} />
+          <span className={styles.moreItemLabel}>{t('topbar.compose-on-click', lang)}</span>
+          <span className={styles.moreItemState} aria-hidden>
+            {composeOnClick ? <Icon name="current" size={10} /> : null}
+          </span>
+        </button>
+      )}
+      {onToggleWebSearch && (
+        <button
+          type="button"
+          className={`${styles.moreItem} ${webSearch ? styles.moreItemOn : ''}`}
+          role="menuitemcheckbox"
+          aria-checked={webSearch}
+          onClick={() => { onToggleWebSearch(); setOpen(false); }}
+        >
+          <Icon name="web-on" size={14} />
+          <span className={styles.moreItemLabel}>{t('topbar.web', lang)}</span>
+          <span className={styles.moreItemState} aria-hidden>
+            {webSearch ? <Icon name="current" size={10} /> : null}
+          </span>
+        </button>
+      )}
+      {onToggleLabels && (
+        <button
+          type="button"
+          className={`${styles.moreItem} ${showLabels ? styles.moreItemOn : ''}`}
+          role="menuitemcheckbox"
+          aria-checked={showLabels}
+          onClick={() => { onToggleLabels(); setOpen(false); }}
+        >
+          <Icon name="tag-on" size={14} />
+          <span className={styles.moreItemLabel}>{t('topbar.labels', lang)}</span>
+          <span className={styles.moreItemState} aria-hidden>
+            {showLabels ? <Icon name="current" size={10} /> : null}
+          </span>
+        </button>
+      )}
+      <button
+        type="button"
+        className={styles.moreItem}
+        role="menuitem"
+        onClick={() => { setLang(lang === 'zh' ? 'en' : 'zh'); setOpen(false); }}
+      >
+        <span className={styles.langInline}>{lang === 'zh' ? 'EN' : '中'}</span>
+        <span className={styles.moreItemLabel}>{t('topbar.lang.zh', lang)}</span>
+      </button>
+    </>
+  );
+
   return (
     <div ref={wrapRef} className={styles.moreWrap}>
       <button
@@ -282,114 +397,17 @@ function MoreMenu({
         aria-expanded={open}
         aria-label={t('topbar.more', lang)}
       ><Icon name="more" size={14} /></button>
-      {open && (
+      {open && !isMobile && (
         <div className={styles.moreMenu} role="menu">
-          {onRegenerate && (
-            <>
-              <button
-                type="button"
-                className={styles.moreItem}
-                role="menuitem"
-                onClick={() => { onRegenerate(); setOpen(false); }}
-              >
-                <Icon name="regenerate" size={14} />
-                <span className={styles.moreItemLabel}>{t('topbar.regenerate', lang)}</span>
-                {regenerateInfo && (
-                  <span
-                    className={styles.moreInfo}
-                    role="img"
-                    aria-label={t('topbar.regenerate.info', lang)}
-                    tabIndex={0}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Icon name="info" size={12} />
-                    <span className={styles.moreInfoPop} role="tooltip">
-                      <span className={styles.moreInfoRow}>
-                        <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.topic', lang)}</span>
-                        <span className={styles.moreInfoVal}>{displayTopic(regenerateInfo.topic, lang) || t('topbar.regenerate.input.none', lang)}</span>
-                      </span>
-                      <span className={styles.moreInfoRow}>
-                        <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.label', lang)}</span>
-                        <span className={styles.moreInfoVal}>{regenerateInfo.clickLabel || t('topbar.regenerate.input.none', lang)}</span>
-                      </span>
-                      {regenerateInfo.clickXY && (
-                        <span className={styles.moreInfoRow}>
-                          <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.click', lang)}</span>
-                          <span className={styles.moreInfoVal}>
-                            {regenerateInfo.clickXY[0].toFixed(2)}, {regenerateInfo.clickXY[1].toFixed(2)}
-                          </span>
-                        </span>
-                      )}
-                      <span className={styles.moreInfoRow}>
-                        <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.image', lang)}</span>
-                        <span className={styles.moreInfoVal}>
-                          {regenerateInfo.hasSeedImage ? '✓' : t('topbar.regenerate.input.none', lang)}
-                        </span>
-                      </span>
-                    </span>
-                  </span>
-                )}
-              </button>
-              <div className={styles.moreSep} aria-hidden />
-            </>
-          )}
-          {onToggleComposeOnClick && (
-            <button
-              type="button"
-              className={`${styles.moreItem} ${composeOnClick ? styles.moreItemOn : ''}`}
-              role="menuitemcheckbox"
-              aria-checked={composeOnClick}
-              onClick={() => { onToggleComposeOnClick(); setOpen(false); }}
-            >
-              {/* Icon stays constant — on/off is shown by the row's tint
-                  + ◆ marker, not by swapping glyphs. */}
-              <Icon name="long-press" size={14} />
-              <span className={styles.moreItemLabel}>{t('topbar.compose-on-click', lang)}</span>
-              <span className={styles.moreItemState} aria-hidden>
-                {composeOnClick ? <Icon name="current" size={10} /> : null}
-              </span>
-            </button>
-          )}
-          {onToggleWebSearch && (
-            <button
-              type="button"
-              className={`${styles.moreItem} ${webSearch ? styles.moreItemOn : ''}`}
-              role="menuitemcheckbox"
-              aria-checked={webSearch}
-              onClick={() => { onToggleWebSearch(); setOpen(false); }}
-            >
-              <Icon name="web-on" size={14} />
-              <span className={styles.moreItemLabel}>{t('topbar.web', lang)}</span>
-              <span className={styles.moreItemState} aria-hidden>
-                {webSearch ? <Icon name="current" size={10} /> : null}
-              </span>
-            </button>
-          )}
-          {onToggleLabels && (
-            <button
-              type="button"
-              className={`${styles.moreItem} ${showLabels ? styles.moreItemOn : ''}`}
-              role="menuitemcheckbox"
-              aria-checked={showLabels}
-              onClick={() => { onToggleLabels(); setOpen(false); }}
-            >
-              <Icon name="tag-on" size={14} />
-              <span className={styles.moreItemLabel}>{t('topbar.labels', lang)}</span>
-              <span className={styles.moreItemState} aria-hidden>
-                {showLabels ? <Icon name="current" size={10} /> : null}
-              </span>
-            </button>
-          )}
-          <button
-            type="button"
-            className={styles.moreItem}
-            role="menuitem"
-            onClick={() => { setLang(lang === 'zh' ? 'en' : 'zh'); setOpen(false); }}
-          >
-            <span className={styles.langInline}>{lang === 'zh' ? 'EN' : '中'}</span>
-            <span className={styles.moreItemLabel}>{t('topbar.lang.zh', lang)}</span>
-          </button>
+          {menuItems}
         </div>
+      )}
+      {isMobile && (
+        <BottomSheet open={open} onClose={() => setOpen(false)} title={t('topbar.more', lang)}>
+          <div className={styles.moreSheetList} role="menu">
+            {menuItems}
+          </div>
+        </BottomSheet>
       )}
     </div>
   );

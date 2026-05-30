@@ -3,6 +3,8 @@ import styles from '../styles/SourcesBadge.module.css';
 import type { SourceRef } from '../state/types';
 import { useLang, t } from '../lib/i18n';
 import { Icon } from './Icon';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { BottomSheet } from './BottomSheet';
 
 type Props = {
   sources: SourceRef[];
@@ -18,6 +20,7 @@ export function SourcesBadge({ sources }: Props) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
   const [lang] = useLang();
+  const isMobile = useIsMobile();
 
   const cancelClose = () => {
     if (closeTimer.current !== null) {
@@ -37,6 +40,52 @@ export function SourcesBadge({ sources }: Props) {
   useEffect(() => () => cancelClose(), []);
 
   if (!sources?.length) return null;
+
+  const list = (
+    <div className={styles.list}>
+      {sources.slice(0, 12).map((s, i) => (
+        <a
+          key={`${i}-${s.url}`}
+          href={s.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.item}
+          title={s.title}
+        >
+          <span className={styles.itemTitle}>{s.title || s.url}</span>
+          <span className={styles.itemMeta}>{s.source || hostnameOf(s.url)}</span>
+          {s.snippet && <span className={styles.itemSnippet}>{s.snippet}</span>}
+        </a>
+      ))}
+    </div>
+  );
+
+  // Mobile: tap the badge to open a bottom sheet (no hover). Desktop:
+  // hover/click dropdown anchored to the badge.
+  if (isMobile) {
+    return (
+      <span className={styles.wrap}>
+        <button
+          type="button"
+          className={styles.badge}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen(true)}
+          title={`${t('sources.heading', lang)} (${sources.length})`}
+        >
+          <Icon name="sources" size={12} />
+          <span>{sources.length}</span>
+        </button>
+        <BottomSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={`${t('sources.heading', lang)} (${sources.length})`}
+        >
+          {list}
+        </BottomSheet>
+      </span>
+    );
+  }
 
   return (
     <span
@@ -71,22 +120,7 @@ export function SourcesBadge({ sources }: Props) {
         <div className={styles.heading}>
           {t('sources.heading', lang)} ({sources.length})
         </div>
-        <div className={styles.list}>
-          {sources.slice(0, 12).map((s, i) => (
-            <a
-              key={`${i}-${s.url}`}
-              href={s.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.item}
-              title={s.title}
-            >
-              <span className={styles.itemTitle}>{s.title || s.url}</span>
-              <span className={styles.itemMeta}>{s.source || hostnameOf(s.url)}</span>
-              {s.snippet && <span className={styles.itemSnippet}>{s.snippet}</span>}
-            </a>
-          ))}
-        </div>
+        {list}
       </div>
     </span>
   );

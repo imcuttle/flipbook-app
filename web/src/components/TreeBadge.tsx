@@ -3,6 +3,8 @@ import styles from '../styles/TreeBadge.module.css';
 import type { Tree } from '../state/types';
 import { useLang, t } from '../lib/i18n';
 import { Icon } from './Icon';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { BottomSheet } from './BottomSheet';
 
 type Props = {
   tree: Tree | null;
@@ -52,6 +54,7 @@ export function TreeBadge({ tree, currentHash, onJump }: Props) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
   const [lang] = useLang();
+  const isMobile = useIsMobile();
 
   const rows = useMemo(() => flattenTree(tree, currentHash), [tree, currentHash]);
 
@@ -71,6 +74,61 @@ export function TreeBadge({ tree, currentHash, onJump }: Props) {
   useEffect(() => () => cancelClose(), []);
 
   if (!rows.length) return null;
+
+  const list = (
+    <div className={styles.list}>
+      {rows.map((r) => (
+        <button
+          key={r.hash}
+          type="button"
+          className={[
+            styles.row,
+            r.isCurrent ? styles.current : '',
+            r.onPath ? styles.onPath : '',
+          ].filter(Boolean).join(' ')}
+          onClick={() => { onJump(r.hash); setOpen(false); }}
+          title={r.title}
+        >
+          <span className={styles.guide} aria-hidden>
+            {/* Render one column per depth level. Inner columns get a
+                vertical line if THAT ancestor still has siblings below;
+                the last column gets the ├ / └ joint. */}
+            {r.isLast.slice(1).map((last, i, arr) => {
+              const isJoint = i === arr.length - 1;
+              if (isJoint) return last ? '└─ ' : '├─ ';
+              return last ? '   ' : '│  ';
+            })}
+          </span>
+          <span className={styles.title}>{r.title || '(untitled)'}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <span className={styles.wrap}>
+        <button
+          type="button"
+          className={styles.badge}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen(true)}
+          title={`${t('tree.tip', lang)} (${rows.length})`}
+        >
+          <Icon name="catalog" size={12} />
+          <span>{rows.length}</span>
+        </button>
+        <BottomSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={`${t('tree.heading', lang)} (${rows.length})`}
+        >
+          {list}
+        </BottomSheet>
+      </span>
+    );
+  }
 
   return (
     <span
@@ -102,33 +160,7 @@ export function TreeBadge({ tree, currentHash, onJump }: Props) {
         <div className={styles.heading}>
           {t('tree.heading', lang)} ({rows.length})
         </div>
-        <div className={styles.list}>
-          {rows.map((r) => (
-            <button
-              key={r.hash}
-              type="button"
-              className={[
-                styles.row,
-                r.isCurrent ? styles.current : '',
-                r.onPath ? styles.onPath : '',
-              ].filter(Boolean).join(' ')}
-              onClick={() => { onJump(r.hash); setOpen(false); }}
-              title={r.title}
-            >
-              <span className={styles.guide} aria-hidden>
-                {/* Render one column per depth level. Inner columns get a
-                    vertical line if THAT ancestor still has siblings below;
-                    the last column gets the ├ / └ joint. */}
-                {r.isLast.slice(1).map((last, i, arr) => {
-                  const isJoint = i === arr.length - 1;
-                  if (isJoint) return last ? '└─ ' : '├─ ';
-                  return last ? '   ' : '│  ';
-                })}
-              </span>
-              <span className={styles.title}>{r.title || '(untitled)'}</span>
-            </button>
-          ))}
-        </div>
+        {list}
       </div>
     </span>
   );

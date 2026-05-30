@@ -1,0 +1,52 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 31, 31, 0.4);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: bsFade 140ms ease-out both;
+}
+
+@keyframes bsFade { from { opacity: 0 } to { opacity: 1 } }
+
+.sheet {
+  width: 100%;
+  max-height: 80vh;
+  background: var(--paper);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.2);
+  padding: 8px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  animation: bsUp 200ms cubic-bezier(0.22, 0.8, 0.32, 1) both;
+}
+
+@keyframes bsUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.grabber {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 4px auto 10px;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 0 2px 8px;
+  flex-shrink: 0;
+}
+
+.content {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}

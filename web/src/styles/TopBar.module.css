@@ -444,6 +444,22 @@
   word-break: break-word;
 }
 
+/* Bottom-sheet variant of the More menu on mobile: full-width rows with
+   larger touch targets. */
+.moreSheetList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moreSheetList .moreItem {
+  font-size: 15px;
+  padding: 12px 10px;
+  border-radius: 8px;
+}
+
+.moreSheetList .moreItem svg { width: 18px; height: 18px; }
+
 /* Mobile */
 @media (max-width: 720px) {
   .topbar { padding: 0 8px; gap: 4px; height: 48px; min-height: 48px; }
