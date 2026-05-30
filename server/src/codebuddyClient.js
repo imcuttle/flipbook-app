@@ -15,7 +15,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { config } from './config.js';
 import { Semaphore } from './generation/queue.js';
-import { PlannerError, ImageGenError, TimeoutError } from './lib/errors.js';
+import { PlannerError, PlannerRefusalError, ImageGenError, TimeoutError } from './lib/errors.js';
 import { log } from './lib/log.js';
 
 const sem = new Semaphore(config.maxParallelCodebuddy);
@@ -124,6 +124,17 @@ function tryParseJson(stdout) {
   if (answer !== null) {
     const fromAnswer = parseAnswerString(answer);
     if (fromAnswer !== undefined) return fromAnswer;
+    // No JSON anywhere in the model's reply. The most common cause is a
+    // content-policy refusal: the model wrote prose explaining why it
+    // can't help (e.g. "I cannot process this request because..."). Detect
+    // that case and surface the prose as a typed RefusalError so the
+    // pipeline broadcasts a friendly toast instead of swallowing it as a
+    // generic parse error → wasted retry → opaque stack trace.
+    const trimmed = answer.trim();
+    const looksLikeProse = /^[A-Za-z\u3400-\u9FFF]/.test(trimmed) && trimmed.length >= 20;
+    if (looksLikeProse) {
+      throw new PlannerRefusalError(trimmed.slice(0, 1200));
+    }
     throw new Error('could not parse JSON from codebuddy result text');
   }
 
@@ -235,7 +246,17 @@ export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs }) 
       } catch (e) {
         lastErr = e;
         log.warn(`callOnce attempt ${attempt} failed:`, e?.message);
+        // A content-policy refusal won't change on retry — same prompt,
+        // same model, same answer. Bail out immediately so we don't waste
+        // 30+s on a doomed second attempt.
+        if (e instanceof PlannerRefusalError) break;
       }
+    }
+    // Refusal: surface the prose directly without dumping a debug file
+    // (the failure isn't actionable from a developer's perspective —
+    // the model just said no).
+    if (lastErr instanceof PlannerRefusalError) {
+      throw lastErr;
     }
     // Dump a diagnostic file so the failure mode is recoverable from disk.
     try {

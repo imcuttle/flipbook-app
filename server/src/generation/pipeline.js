@@ -23,6 +23,7 @@ import { searchWeb } from './searchWeb.js';
 import { runOcr } from './ocr.js';
 import { describeSeedImage } from './describeSeed.js';
 import { touchLastRun, updateCanvasTopic } from '../store/canvasStore.js';
+import { PlannerRefusalError } from '../lib/errors.js';
 import {
   recordNode, recordHotspot, bumpNodeCount, setCoverIfMissing,
   findNearbyHotspot, recordSources, recordTextSpans,
@@ -33,6 +34,17 @@ import { log } from '../lib/log.js';
 // Up to 4 click expansions per (canvasId, parentHash) run in parallel.
 const MAX_PARALLEL_CLICKS_PER_NODE = Number(process.env.MAX_PARALLEL_CLICKS_PER_NODE || 4);
 const clickSem = new PerKeySemaphore(MAX_PARALLEL_CLICKS_PER_NODE);
+
+// Per-job generation log helper. Every line gets a `[gen <jobId>]` prefix
+// so multiple in-flight jobs (4 parallel clicks per parent + multiple
+// canvases) stay readable when interleaved in the server log. Phase tags
+// match the SSE event names so a developer can correlate log lines with
+// what the frontend's pending bubble was showing at the time.
+function genLog(jobId, phase, msg, extra) {
+  const prefix = `[gen ${jobId}] ${phase}`;
+  if (extra !== undefined) log.info(prefix, msg, extra);
+  else log.info(prefix, msg);
+}
 
 function clickKey(canvasId, parentHash) { return `${canvasId}::${parentHash}`; }
 
@@ -138,6 +150,12 @@ async function buildAndRegisterNode({
   genInputs = null,
 }) {
   const depth = parentNode ? (parentNode.depth ?? 0) + 1 : 0;
+  const startedAt = Date.now();
+  genLog(jobId, 'start',
+    `${parentNode ? `child of ${parentNode.hash}` : 'root'} | topic="${canvas.topic}" | label="${currentLabel || ''}" | depth=${depth}`
+    + `${seedImagePath ? ' | seed=' + seedImagePath.split('/').pop() : ''}`
+    + ` | webSearch=${webSearchEnabled !== false ? 'on' : 'off'}`,
+  );
 
   // When the user attached a seed image, run a describe-first LLM pass
   // so downstream steps (search queries, planner caption, image prompt)
@@ -147,16 +165,22 @@ async function buildAndRegisterNode({
   // "this is the source image".
   let seedDescription = null;
   if (seedImagePath && config.enableCodebuddy) {
+    const t = Date.now();
+    genLog(jobId, 'seed.describe', `analysing ${seedImagePath.split('/').pop()}…`);
     try {
       seedDescription = await describeSeedImage({
         seedImagePath,
         userTopic: canvas.topic,
       });
       if (seedDescription?.suggested_topic) {
-        log.info(`[seed] describe → "${seedDescription.subject}" (queries: ${(seedDescription.search_queries || []).join(', ') || '∅'})`);
+        genLog(jobId, 'seed.describe',
+          `→ "${seedDescription.subject}" (${Date.now() - t}ms; queries: ${(seedDescription.search_queries || []).join(' / ') || '∅'})`,
+        );
+      } else {
+        genLog(jobId, 'seed.describe', `→ no structured subject (${Date.now() - t}ms) — falling back to canvas topic`);
       }
     } catch (e) {
-      log.warn(`[seed] describe failed: ${e?.message}`);
+      log.warn(`[gen ${jobId}] seed.describe failed: ${e?.message}`);
     }
   }
 
@@ -174,6 +198,9 @@ async function buildAndRegisterNode({
   // topic, returning irrelevant results).
   let sources = [];
   if (seedDescription?.search_queries?.length && webSearchEnabled !== false) {
+    const tSearch = Date.now();
+    genLog(jobId, 'search.seed',
+      `running ${seedDescription.search_queries.length} image-derived queries`);
     broadcast(canvas, {
       type: SseEvents.SEARCH_STARTED, canvasId: canvas.id, jobId,
       queries: seedDescription.search_queries,
@@ -184,14 +211,17 @@ async function buildAndRegisterNode({
         perQueryMax: 5,
       });
     } catch (e) {
-      log.warn('searchWeb (seed) failed:', e?.message);
+      log.warn(`[gen ${jobId}] searchWeb (seed) failed: ${e?.message}`);
     }
+    genLog(jobId, 'search.seed',
+      `→ ${sources.length} sources (${Date.now() - tSearch}ms)`);
     broadcast(canvas, {
       type: SseEvents.SEARCH_DONE, canvasId: canvas.id, jobId,
       queries: seedDescription.search_queries,
       sourceCount: sources.length,
     });
   } else {
+    const tSearch = Date.now();
     sources = await decideAndSearch({
       canvas, jobId,
       topic: effectiveSubject,
@@ -201,8 +231,16 @@ async function buildAndRegisterNode({
       intent: parentNode ? 'drilldown' : 'root',
       webSearchEnabled,
     });
+    if (webSearchEnabled !== false) {
+      genLog(jobId, 'search.decide',
+        `→ ${sources.length} sources (${Date.now() - tSearch}ms)`);
+    } else {
+      genLog(jobId, 'search.decide', 'skipped (toggle off)');
+    }
   }
 
+  const tPlanner = Date.now();
+  genLog(jobId, 'planner', `topic="${effectiveSubject}" sources=${sources.length}`);
   let plannerJson;
   try {
     plannerJson = await plannerCall({
@@ -215,11 +253,26 @@ async function buildAndRegisterNode({
       seedImagePath,
       seedDescription,
     });
+    genLog(jobId, 'planner',
+      `→ "${plannerJson.title}" (caption ${plannerJson.caption.length}c, image_prompt ${plannerJson.image_prompt.length}c, ${Date.now() - tPlanner}ms)`);
   } catch (e) {
+    // Refusals (model returned prose / content-policy decline) come
+    // back as PlannerRefusalError with the prose carried as the message.
+    // Surface it as a non-recoverable planner-phase error so the UI
+    // toast is the model's own explanation, not a stack-trace summary.
+    const isRefusal = e instanceof PlannerRefusalError;
     broadcast(canvas, {
       type: SseEvents.ERROR, canvasId: canvas.id, jobId,
-      phase: 'plan', message: String(e?.message || e), recoverable: false,
+      phase: 'plan',
+      message: isRefusal ? e.message : String(e?.message || e),
+      code: isRefusal ? 'planner_refusal' : 'planner_error',
+      recoverable: false,
     });
+    if (isRefusal) {
+      log.warn(`[gen ${jobId}] planner refusal: ${e.message.slice(0, 200)}`);
+    } else {
+      log.error(`[gen ${jobId}] planner error:`, e?.stack || e);
+    }
     throw e;
   }
 
@@ -228,6 +281,7 @@ async function buildAndRegisterNode({
 
   // Cache check
   if (await nodeExists(canvas.id, hash)) {
+    genLog(jobId, 'cache-hit', `${hash} — same hashSeed → existing node`);
     const cached = await readNode(canvas.id, hash);
     broadcast(canvas, { type: SseEvents.NODE_READY, canvasId: canvas.id, jobId, hash, node: cached });
     return { node: cached, cacheHit: true };
@@ -258,6 +312,8 @@ async function buildAndRegisterNode({
   };
   broadcast(canvas, { type: SseEvents.PLANNER_DONE, canvasId: canvas.id, jobId, hash, node: skeleton });
 
+  const tImage = Date.now();
+  genLog(jobId, 'image', `${seedImagePath ? 'image-edit' : 'text-to-image'} hash=${hash}`);
   broadcast(canvas, { type: SseEvents.IMAGE_STARTED, canvasId: canvas.id, jobId, hash });
   let imageOutcome;
   try {
@@ -267,6 +323,8 @@ async function buildAndRegisterNode({
       seedImagePath,
       seedDescription,
     });
+    genLog(jobId, 'image',
+      `→ ${imageOutcome.providerName}.${imageOutcome.ext}${imageOutcome.fallback ? ' (fallback)' : ''} (${Date.now() - tImage}ms)`);
   } catch (e) {
     broadcast(canvas, {
       type: SseEvents.ERROR, canvasId: canvas.id, jobId,
@@ -352,6 +410,8 @@ async function buildAndRegisterNode({
   broadcast(canvas, { type: SseEvents.NODE_READY, canvasId: canvas.id, jobId, hash, node });
   const total = await countNodes(canvas.id);
   broadcast(canvas, { type: SseEvents.TREE_UPDATED, canvasId: canvas.id, jobId, treeNodeCount: total });
+  genLog(jobId, 'done',
+    `${hash} "${node.title}" — ${Date.now() - startedAt}ms total | tree=${total} nodes`);
   return { node, cacheHit: false };
 }
 
@@ -380,6 +440,12 @@ export async function expandFromClick(canvas, args = {}) {
   const { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel } = args;
   if (!parentNode || !Array.isArray(clickXY)) throw new Error('parentNode and clickXY required');
 
+  genLog(jobId, 'click',
+    `parent=${parentNode.hash} xy=[${clickXY[0].toFixed(3)},${clickXY[1].toFixed(3)}]`
+    + `${userLabel ? ` userLabel="${userLabel}"` : ''}`
+    + `${seedImagePath ? ' seed=' + seedImagePath.split('/').pop() : ''}`,
+  );
+
   // Snapshot the original generation inputs so a future Regenerate can
   // replay the exact same context (seed image path, user-typed label,
   // click position on the host parent). Stored on the child node JSON
@@ -398,6 +464,7 @@ export async function expandFromClick(canvas, args = {}) {
     x: clickXY[0], y: clickXY[1], threshold: SPATIAL_THRESHOLD,
   });
   if (near?.childHash) {
+    genLog(jobId, 'dedup.spatial', `→ jumping to existing ${near.childHash}`);
     const cached = await readNode(canvas.id, near.childHash);
     broadcast(canvas, {
       type: SseEvents.NODE_READY, canvasId: canvas.id, jobId,
@@ -422,6 +489,7 @@ export async function expandFromClick(canvas, args = {}) {
   if (userLabel && userLabel.trim()) {
     // User-supplied label — synthesize the hotspot record without an LLM call.
     const trimmed = userLabel.trim().slice(0, 80);
+    genLog(jobId, 'label.user', `"${trimmed}" — skipping LLM inference`);
     labelOut = {
       label: trimmed,
       anchor_xy: [clickXY[0] + 0.08, clickXY[1] + 0.06],
@@ -429,12 +497,19 @@ export async function expandFromClick(canvas, args = {}) {
       next_prompt: trimmed,
     };
   } else {
+    const tLabel = Date.now();
+    genLog(jobId, 'label.llm', 'inferring from click position…');
     labelOut = await clickLabelCall({
       parentNode, clickXY,
       existingLabels: parentNode.hotspots ?? [],
       canvasId: canvas.id,
       jobId,
     });
+    if (labelOut.rejected) {
+      genLog(jobId, 'label.llm', `→ REJECTED (${Date.now() - tLabel}ms): ${labelOut.reason}`);
+    } else {
+      genLog(jobId, 'label.llm', `→ "${labelOut.label}" (${Date.now() - tLabel}ms)`);
+    }
   }
 
   // Low-confidence rejection: the LLM didn't see anything drillable under
@@ -458,6 +533,8 @@ export async function expandFromClick(canvas, args = {}) {
     (h) => h.label?.trim().toLowerCase() === labelOut.label?.trim().toLowerCase(),
   );
   if (existing?.next_hash) {
+    genLog(jobId, 'dedup.semantic',
+      `→ "${labelOut.label}" already exists → ${existing.next_hash}`);
     const cached = await readNode(canvas.id, existing.next_hash);
     broadcast(canvas, {
       type: SseEvents.NODE_READY, canvasId: canvas.id, jobId,
@@ -542,8 +619,14 @@ export function enqueueRootGeneration(canvas, opts = {}) {
   const jobId = nanoid(8);
   const webSearchEnabled = opts.webSearchEnabled !== false; // default on
   const seedImagePath = opts.seedImagePath ?? null;
+  genLog(jobId, 'enqueue.root',
+    `canvas=${canvas.id} topic="${canvas.topic}"${seedImagePath ? ' (seeded)' : ''}`);
   canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled, seedImagePath }).catch((e) => {
-    log.error('generateRootNode failed:', e?.stack || e);
+    if (e instanceof PlannerRefusalError) {
+      log.warn(`[gen ${jobId}] generateRootNode aborted: model refused (${e.message.slice(0, 120)})`);
+    } else {
+      log.error(`[gen ${jobId}] generateRootNode failed:`, e?.stack || e);
+    }
   }));
   return jobId;
 }
@@ -555,6 +638,12 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
   const jobId = nanoid(8);
   const key = clickKey(canvas.id, parentNode.hash);
   const enabled = webSearchEnabled !== false; // default on
+  genLog(jobId, 'enqueue.click',
+    `canvas=${canvas.id} parent=${parentNode.hash}`
+    + ` xy=[${Number(clickXY[0]).toFixed(3)},${Number(clickXY[1]).toFixed(3)}]`
+    + `${userLabel ? ' label="' + userLabel + '"' : ''}`
+    + `${seedImagePath ? ' (seeded)' : ''}`,
+  );
   // Fire-and-forget; progress is reported via SSE.
   clickSem.run(key, () => expandFromClick(canvas, {
     parentNode, clickXY, jobId,
@@ -562,7 +651,13 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
     seedImagePath: seedImagePath ?? null,
     userLabel: userLabel ?? null,
   }))
-    .catch((e) => log.error('expandFromClick failed:', e?.stack || e));
+    .catch((e) => {
+      if (e instanceof PlannerRefusalError) {
+        log.warn(`[gen ${jobId}] expandFromClick aborted: model refused (${e.message.slice(0, 120)})`);
+      } else {
+        log.error(`[gen ${jobId}] expandFromClick failed:`, e?.stack || e);
+      }
+    });
   // Surface queue stats so the route can echo them back to the client.
   return {
     jobId,
