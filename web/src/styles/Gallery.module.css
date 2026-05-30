@@ -96,8 +96,13 @@
 }
 
 .cardSelected {
-  border-color: var(--accent, #c0392b);
-  box-shadow: 0 0 0 2px var(--accent, #c0392b) inset;
+  border-color: #c0392b;
+  /* Use outline rather than an inset box-shadow: the card has
+     overflow:hidden + rounded corners, which clips an inset shadow
+     unevenly (the bottom edge renders thicker/cut). outline sits
+     outside the border box, follows the radius, and isn't clipped. */
+  outline: 2px solid #c0392b;
+  outline-offset: -1px;
 }
 
 .checkbox {
