@@ -27,6 +27,14 @@ test('builds planner language instructions for all user-visible text', async () 
   assert.match(languageInstruction('en'), /English/);
 });
 
+test('language instruction defers to explicit user-requested language', async () => {
+  const { languageInstruction } = await loadLanguage();
+  // The default is a preference, not a hard rule: an explicit language
+  // request in the topic/label/note must override it.
+  assert.match(languageInstruction('zh'), /覆盖|为准/);
+  assert.match(languageInstruction('en'), /override/i);
+});
+
 test('builds image prompt instruction for visible annotations language', async () => {
   const { imageLanguageInstruction } = await loadLanguage();
   assert.match(imageLanguageInstruction('zh'), /图片中.*中文/s);

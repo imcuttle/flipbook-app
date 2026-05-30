@@ -64,11 +64,16 @@ export async function resumeIncomplete(canvas) {
       resumed++;
     }
 
-    // Case 2: any parent hotspot whose next_hash references a missing /
-    // imageless child node. Re-enqueue an expandFromClick using the
-    // hotspot's leader_xy as the click coordinate and the hotspot's
-    // label as the user-supplied label (so the click-label LLM is
-    // skipped entirely in pipeline.js).
+    // Case 2: parent hotspots whose child node is missing / incomplete.
+    // Two sub-cases:
+    //   (a) linked hotspot (next_hash set) but child JSON missing/imageless
+    //       — re-drive by hash.
+    //   (b) PENDING hotspot (next_hash null) — the click was appended to
+    //       the parent before the server died/refresh interrupted it, so
+    //       the child never finished. Re-drive in place by hotspot index
+    //       (resumeHotspotIndex) so we don't append a duplicate hotspot.
+    // Both re-emit planning_started (with leader_xy as clickXY) so a
+    // freshly-reconnected client rebuilds its pending bubble.
     for (const [parentHash, meta] of Object.entries(tree.nodes)) {
       // Only process parents whose own JSON exists (otherwise re-running
       // the click would crash on the missing parent).
@@ -76,22 +81,38 @@ export async function resumeIncomplete(canvas) {
       let parent;
       try { parent = await readNode(canvas.id, parentHash); } catch { continue; }
       if (!Array.isArray(parent.hotspots)) continue;
-      for (const h of parent.hotspots) {
+      for (let idx = 0; idx < parent.hotspots.length; idx++) {
+        const h = parent.hotspots[idx];
         const childHash = h?.next_hash;
-        if (!childHash) continue;
-        if (await nodeIsComplete(canvas.id, childHash)) continue;
-        log.info(`[resume] ${canvas.id}: child ${childHash} of ${parentHash} incomplete — re-enqueueing click "${h.label}"`);
-        const clickXY = Array.isArray(h.leader_xy) ? [Number(h.leader_xy[0]), Number(h.leader_xy[1])] : [0.5, 0.5];
-        // Re-enqueue. We pass userLabel = the existing hotspot label so
-        // the pipeline skips the click-label LLM call and jumps straight
-        // to planner + image.
-        enqueueClickExpansion(canvas, {
-          parentNode: parent,
-          clickXY,
-          webSearchEnabled: parent.web_search_used !== false,
-          userLabel: h.label,
-        });
-        resumed++;
+        const clickXY = Array.isArray(h?.leader_xy)
+          ? [Number(h.leader_xy[0]), Number(h.leader_xy[1])]
+          : [0.5, 0.5];
+
+        if (childHash) {
+          // (a) linked but child incomplete.
+          if (await nodeIsComplete(canvas.id, childHash)) continue;
+          log.info(`[resume] ${canvas.id}: child ${childHash} of ${parentHash} incomplete — re-enqueueing click "${h.label}"`);
+          enqueueClickExpansion(canvas, {
+            parentNode: parent,
+            clickXY,
+            webSearchEnabled: parent.web_search_used !== false,
+            userLabel: h.label,
+          });
+          resumed++;
+        } else {
+          // (b) pending hotspot — child never started/finished. Re-drive
+          // in place so the spinner card eventually links to a real child
+          // and the pending bubble reappears.
+          log.info(`[resume] ${canvas.id}: pending hotspot[${idx}] "${h.label}" of ${parentHash} — re-driving in place`);
+          enqueueClickExpansion(canvas, {
+            parentNode: parent,
+            clickXY,
+            webSearchEnabled: parent.web_search_used !== false,
+            userLabel: h.label,
+            resumeHotspotIndex: idx,
+          });
+          resumed++;
+        }
       }
     }
   } catch (e) {

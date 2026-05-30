@@ -264,6 +264,30 @@ function applySse(state: AppState, evt: SseEvent): AppState {
           s = { ...s, currentHash: evt.hash, webSearch: adoptToggle(node) };
         }
       }
+      // Keep state.tree in sync so the catalog (TreeBadge) updates live as
+      // nodes finish — without this it only refreshed on a full reload
+      // (getTree). We upsert the node into tree.nodes and link it under its
+      // parent's children[]. Root sets tree.root.
+      if (s.tree?.nodes) {
+        const tnodes = { ...s.tree.nodes };
+        const existing = tnodes[evt.hash];
+        tnodes[evt.hash] = {
+          title: node.title,
+          depth: node.depth ?? existing?.depth ?? 0,
+          parent: node.parent ?? null,
+          children: existing?.children ?? [],
+        };
+        // Link into parent's children[] (dedup).
+        if (node.parent && tnodes[node.parent]) {
+          const kids = tnodes[node.parent].children ?? [];
+          if (!kids.includes(evt.hash)) {
+            tnodes[node.parent] = { ...tnodes[node.parent], children: [...kids, evt.hash] };
+          }
+        }
+        const nextTree = { ...s.tree, nodes: tnodes };
+        if (!node.parent && !nextTree.root) nextTree.root = evt.hash;
+        s = { ...s, tree: nextTree };
+      }
       return s;
     }
 

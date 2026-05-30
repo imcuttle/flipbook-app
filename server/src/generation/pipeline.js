@@ -486,10 +486,21 @@ export async function expandFromClick(canvas, args = {}) {
   const { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel, lang = 'zh' } = args;
   if (!parentNode || !Array.isArray(clickXY)) throw new Error('parentNode and clickXY required');
 
-  genLog(jobId, 'click',
+  // Resume path: when re-driving an existing PENDING hotspot (next_hash
+  // still null) after an SSE reconnect, we reuse that hotspot in place
+  // instead of appending a new one — otherwise refresh would multiply
+  // the hotspot every time. `resumeHotspotIndex` points at the slot in
+  // parentNode.hotspots[] to reuse; dedup + append are skipped.
+  const resumeHotspotIndex = Number.isInteger(args.resumeHotspotIndex)
+    ? args.resumeHotspotIndex
+    : null;
+  const isResume = resumeHotspotIndex !== null;
+
+  genLog(jobId, isResume ? 'click.resume' : 'click',
     `parent=${parentNode.hash} xy=[${clickXY[0].toFixed(3)},${clickXY[1].toFixed(3)}]`
     + `${userLabel ? ` userLabel="${userLabel}"` : ''}`
-    + `${seedImagePath ? ' seed=' + seedImagePath.split('/').pop() : ''}`,
+    + `${seedImagePath ? ' seed=' + seedImagePath.split('/').pop() : ''}`
+    + `${isResume ? ` resumeIdx=${resumeHotspotIndex}` : ''}`,
   );
 
   // Snapshot the original generation inputs so a future Regenerate can
@@ -503,33 +514,82 @@ export async function expandFromClick(canvas, args = {}) {
     seed_image: seedImagePath ?? null,
   };
 
-  // Spatial dedup: if there's already a hotspot near this click, jump to its child.
+  // Spatial dedup: if there's already a hotspot near this click, jump to
+  // its child. Skipped on resume — we already know which hotspot we're
+  // re-driving and its child is intentionally still missing.
   const SPATIAL_THRESHOLD = 0.06;
-  const near = await findNearbyHotspot({
-    canvasId: canvas.id, parentHash: parentNode.hash,
-    x: clickXY[0], y: clickXY[1], threshold: SPATIAL_THRESHOLD,
-  });
-  if (near?.childHash) {
-    genLog(jobId, 'dedup.spatial', `→ jumping to existing ${near.childHash}`);
-    const cached = await readNode(canvas.id, near.childHash);
-    broadcast(canvas, {
-      type: SseEvents.NODE_READY, canvasId: canvas.id, jobId,
-      hash: near.childHash, node: cached,
+  if (!isResume) {
+    const near = await findNearbyHotspot({
+      canvasId: canvas.id, parentHash: parentNode.hash,
+      x: clickXY[0], y: clickXY[1], threshold: SPATIAL_THRESHOLD,
     });
-    broadcast(canvas, {
-      type: SseEvents.DONE, canvasId: canvas.id, jobId,
-      hash: near.childHash, cacheHit: true,
-    });
-    return cached;
+    if (near?.childHash) {
+      genLog(jobId, 'dedup.spatial', `→ jumping to existing ${near.childHash}`);
+      const cached = await readNode(canvas.id, near.childHash);
+      broadcast(canvas, {
+        type: SseEvents.NODE_READY, canvasId: canvas.id, jobId,
+        hash: near.childHash, node: cached,
+      });
+      broadcast(canvas, {
+        type: SseEvents.DONE, canvasId: canvas.id, jobId,
+        hash: near.childHash, cacheHit: true,
+      });
+      return cached;
+    }
   }
 
   // 1) Label inference (skipped when the user supplied an explicit label
   //    — they've already told us what they want).
   broadcast(canvas, {
     type: SseEvents.PLANNING_STARTED, canvasId: canvas.id, jobId,
-    parentHash: parentNode.hash, hotspotIndex: null, label: null,
+    parentHash: parentNode.hash, hotspotIndex: null, label: userLabel ?? null,
     clickXY,
   });
+
+  // Resume short-circuit: reuse the existing pending hotspot's fields as
+  // labelOut, skip dedup + append entirely, jump straight to building the
+  // child and linking it back into the existing slot.
+  if (isResume) {
+    const existing = (parentNode.hotspots ?? [])[resumeHotspotIndex];
+    if (!existing) {
+      genLog(jobId, 'click.resume', `hotspot index ${resumeHotspotIndex} gone — aborting resume`);
+      broadcast(canvas, { type: SseEvents.DONE, canvasId: canvas.id, jobId, hash: parentNode.hash, cacheHit: false });
+      return null;
+    }
+    const { node: child, cacheHit } = await buildAndRegisterNode({
+      canvas, parentNode, jobId,
+      currentLabel: existing.label,
+      hashSeed: existing.label,
+      webSearchEnabled,
+      seedImagePath,
+      genInputs,
+      lang,
+    });
+    const parentAfterLink = await withParentLock(canvas.id, parentNode.hash, async () => {
+      const fresh = await readNode(canvas.id, parentNode.hash);
+      if (fresh.hotspots[resumeHotspotIndex]) {
+        fresh.hotspots[resumeHotspotIndex].next_hash = child.hash;
+        await writeNode(canvas.id, fresh);
+      }
+      return fresh;
+    });
+    broadcast(canvas, {
+      type: SseEvents.NODE_READY, canvasId: canvas.id, jobId,
+      hash: parentAfterLink.hash, node: parentAfterLink,
+    });
+    try {
+      await recordHotspot({
+        canvasId: canvas.id,
+        parentHash: parentAfterLink.hash,
+        childHash: child.hash,
+        label: existing.label,
+        anchorXY: existing.anchor_xy,
+        leaderXY: existing.leader_xy,
+      });
+    } catch (e) { log.warn('db recordHotspot (resume):', e?.message); }
+    broadcast(canvas, { type: SseEvents.DONE, canvasId: canvas.id, jobId, hash: child.hash, cacheHit });
+    return child;
+  }
 
   let labelOut;
   if (userLabel && userLabel.trim()) {
@@ -683,7 +743,7 @@ export function enqueueRootGeneration(canvas, opts = {}) {
 // Click expansions: capped at MAX_PARALLEL_CLICKS_PER_NODE per (canvas, parent).
 // Different parents and different canvases run in parallel. Excess clicks are
 // queued in arrival order until a slot frees up.
-export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel, lang = 'zh' }) {
+export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel, lang = 'zh', resumeHotspotIndex = null }) {
   const jobId = nanoid(8);
   const key = clickKey(canvas.id, parentNode.hash);
   const enabled = webSearchEnabled !== false; // default on
@@ -691,7 +751,8 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
     `canvas=${canvas.id} parent=${parentNode.hash}`
     + ` xy=[${Number(clickXY[0]).toFixed(3)},${Number(clickXY[1]).toFixed(3)}]`
     + `${userLabel ? ' label="' + userLabel + '"' : ''}`
-    + `${seedImagePath ? ' (seeded)' : ''}`,
+    + `${seedImagePath ? ' (seeded)' : ''}`
+    + `${Number.isInteger(resumeHotspotIndex) ? ' resume=' + resumeHotspotIndex : ''}`,
   );
   // Fire-and-forget; progress is reported via SSE.
   clickSem.run(key, () => expandFromClick(canvas, {
@@ -700,6 +761,7 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
     seedImagePath: seedImagePath ?? null,
     userLabel: userLabel ?? null,
     lang,
+    resumeHotspotIndex,
   }))
     .catch((e) => {
       if (e instanceof PlannerRefusalError) {
