@@ -153,6 +153,16 @@ function imageUrlFor(canvasId, hash, ext) {
   return `/api/canvas/${canvasId}/images/${hash}.${ext}`;
 }
 
+// Map an absolute seed-image upload path to its web-accessible URL via the
+// assets route (GET /api/canvas/:id/uploads/:file). We only need the
+// basename — the file already lives under the canvas's uploads/ dir.
+function seedImageUrlFor(canvasId, absPath) {
+  if (!absPath) return null;
+  const base = String(absPath).split('/').pop();
+  if (!base) return null;
+  return `/api/canvas/${canvasId}/uploads/${base}`;
+}
+
 // --------- Core: build a new node (planner + image) ---------
 async function buildAndRegisterNode({
   canvas, parentNode, jobId, currentLabel, hashSeed, webSearchEnabled,
@@ -329,6 +339,10 @@ async function buildAndRegisterNode({
     web_search_used: webSearchEnabled !== false,
     // Persist the upload path so future debugging / re-renders can find it.
     ...(seedImagePath ? { seed_image: seedImagePath } : {}),
+    // Web-accessible URL for the seed image so the client can show a
+    // thumbnail (e.g. in the Regenerate info popover). Derived from the
+    // upload's basename under the canvas's uploads/ dir.
+    ...(seedImagePath ? { seed_image_url: seedImageUrlFor(canvas.id, seedImagePath) } : {}),
     // Snapshot of the click context that produced this node, so a
     // Regenerate request can replay the exact same parent + click point
     // + user-typed label + seed-image triple. Captured here for child
@@ -464,6 +478,17 @@ export async function generateRootNode(canvas, args = {}) {
     webSearchEnabled: args.webSearchEnabled,
     seedImagePath: args.seedImagePath ?? null,
     lang: args.lang ?? 'zh',
+    // Record the root's original inputs so the Regenerate info popover can
+    // show exactly what was supplied. user_topic is null for image-only
+    // canvases (sentinel '__pending__'), so the UI shows no topic — matching
+    // "完全根据输入来" / image-only has no topic.
+    genInputs: {
+      parent_hash: null,
+      click_xy: null,
+      user_label: null,
+      user_topic: canvas.topic === '__pending__' ? null : canvas.topic,
+      seed_image: args.seedImagePath ?? null,
+    },
   });
   broadcast(canvas, {
     type: SseEvents.DONE, canvasId: canvas.id, jobId, hash: node.hash, cacheHit,

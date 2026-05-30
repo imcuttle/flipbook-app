@@ -44,13 +44,17 @@ export type Node = {
   // mostly uses it as an "this node had a seed" signal; the actual file
   // isn't fetchable over the API.
   seed_image?: string | null;
+  // Web-accessible URL for the seed image (assets route). Present when
+  // this node was generated from an uploaded image.
+  seed_image_url?: string | null;
   // Snapshot of the original click context that produced this node.
   // Replayed by the regenerate flow; also surfaced as the info-hover
   // popover in the More menu.
   gen_inputs?: {
-    parent_hash: string;
-    click_xy: [number, number];
+    parent_hash: string | null;
+    click_xy: [number, number] | null;
     user_label: string | null;
+    user_topic?: string | null;
     seed_image: string | null;
   } | null;
   path: { hash: string; title: string }[];

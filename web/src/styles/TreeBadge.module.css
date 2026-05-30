@@ -162,5 +162,8 @@
 
 @media (max-width: 720px) {
   .popover { min-width: 260px; max-width: 92vw; }
-  .row { font-size: 11px; }
+  /* Catalog now opens as a bottom sheet on mobile — give rows comfortable
+     touch-readable sizing rather than the cramped desktop-dropdown size. */
+  .row { font-size: 14px; padding: 9px 8px; }
+  .guide { font-size: 13px; }
 }

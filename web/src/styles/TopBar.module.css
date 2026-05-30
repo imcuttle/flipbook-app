@@ -444,6 +444,38 @@
   word-break: break-word;
 }
 
+.moreInfoThumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  cursor: zoom-in;
+  flex-shrink: 0;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  cursor: zoom-out;
+  animation: lbFade 140ms ease-out both;
+}
+
+@keyframes lbFade { from { opacity: 0 } to { opacity: 1 } }
+
+.lightboxImg {
+  max-width: 96vw;
+  max-height: 92vh;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
 /* Bottom-sheet variant of the More menu on mobile: full-width rows with
    larger touch targets. */
 .moreSheetList {
@@ -453,12 +485,12 @@
 }
 
 .moreSheetList .moreItem {
-  font-size: 15px;
-  padding: 12px 10px;
+  font-size: 13.5px;
+  padding: 10px 10px;
   border-radius: 8px;
 }
 
-.moreSheetList .moreItem svg { width: 18px; height: 18px; }
+.moreSheetList .moreItem svg { width: 16px; height: 16px; }
 
 /* Mobile */
 @media (max-width: 720px) {

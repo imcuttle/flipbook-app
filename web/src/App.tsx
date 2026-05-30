@@ -54,9 +54,10 @@ export default function App() {
   // double-clicking Generate during multipart upload would fire multiple
   // POSTs.
   const [submitting, setSubmitting] = useState(false);
-  // Whether long-press should open the floating compose panel (default ON)
-  // or fire generate immediately (legacy behaviour).
-  const [composeOnClick, setComposeOnClick] = useState(true);
+  // Whether long-press should open the floating compose panel (default
+  // OFF — long-press fires generate immediately; user can enable the
+  // compose panel via the More menu).
+  const [composeOnClick, setComposeOnClick] = useState(false);
   // Pending click-composer state. When non-null the floating panel is open
   // anchored at this image-relative xy, capturing label + image attachment.
   const [clickComposer, setClickComposer] = useState<{ xy: [number, number] } | null>(null);

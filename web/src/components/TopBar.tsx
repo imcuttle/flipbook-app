@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styles from '../styles/TopBar.module.css';
 import type { Node } from '../state/types';
 import { useLang, t, displayTopic } from '../lib/i18n';
@@ -211,11 +212,14 @@ export function TopBar(props: Props) {
           onToggleComposeOnClick={view === 'canvas' && !readOnly ? onToggleComposeOnClick : undefined}
           onRegenerate={view === 'canvas' && !readOnly && currentNode ? onRegenerate : undefined}
           regenerateInfo={view === 'canvas' && currentNode ? {
-            topic,
-            title: currentNode.title,
+            // Faithful to inputs: topic only if the user actually typed one
+            // (root node records user_topic; null for image-only). Child
+            // nodes have no topic input.
+            userTopic: currentNode.gen_inputs?.user_topic ?? null,
             clickLabel: currentNode.gen_inputs?.user_label ?? null,
             clickXY: currentNode.gen_inputs?.click_xy ?? null,
-            hasSeedImage: !!(currentNode.gen_inputs?.seed_image ?? currentNode.seed_image),
+            seedImageUrl: currentNode.seed_image_url
+              ?? (currentNode.gen_inputs?.seed_image ? null : null),
           } : null}
           webSearch={webSearch}
           showLabels={showLabels}
@@ -229,11 +233,10 @@ export function TopBar(props: Props) {
 // More-menu — collapses lower-priority toggles into a kebab dropdown so
 // the right cluster stays compact as features accrue.
 type RegenerateInfo = {
-  topic: string | null;
-  title: string;
+  userTopic: string | null;
   clickLabel: string | null;
   clickXY: [number, number] | null;
-  hasSeedImage: boolean;
+  seedImageUrl: string | null;
 };
 
 type MoreMenuProps = {
@@ -257,6 +260,8 @@ function MoreMenu({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const isMobile = useIsMobile();
+  // Lightbox for viewing the seed image full-size from the regenerate info.
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -288,7 +293,9 @@ function MoreMenu({
           >
             <Icon name="regenerate" size={14} />
             <span className={styles.moreItemLabel}>{t('topbar.regenerate', lang)}</span>
-            {regenerateInfo && !isMobile && (
+            {regenerateInfo && !isMobile
+              && (regenerateInfo.userTopic || regenerateInfo.clickLabel
+                || regenerateInfo.clickXY || regenerateInfo.seedImageUrl) && (
               <span
                 className={styles.moreInfo}
                 role="img"
@@ -298,14 +305,18 @@ function MoreMenu({
               >
                 <Icon name="info" size={12} />
                 <span className={styles.moreInfoPop} role="tooltip">
-                  <span className={styles.moreInfoRow}>
-                    <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.topic', lang)}</span>
-                    <span className={styles.moreInfoVal}>{displayTopic(regenerateInfo.topic, lang) || t('topbar.regenerate.input.none', lang)}</span>
-                  </span>
-                  <span className={styles.moreInfoRow}>
-                    <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.label', lang)}</span>
-                    <span className={styles.moreInfoVal}>{regenerateInfo.clickLabel || t('topbar.regenerate.input.none', lang)}</span>
-                  </span>
+                  {regenerateInfo.userTopic && (
+                    <span className={styles.moreInfoRow}>
+                      <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.topic', lang)}</span>
+                      <span className={styles.moreInfoVal}>{regenerateInfo.userTopic}</span>
+                    </span>
+                  )}
+                  {regenerateInfo.clickLabel && (
+                    <span className={styles.moreInfoRow}>
+                      <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.label', lang)}</span>
+                      <span className={styles.moreInfoVal}>{regenerateInfo.clickLabel}</span>
+                    </span>
+                  )}
                   {regenerateInfo.clickXY && (
                     <span className={styles.moreInfoRow}>
                       <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.click', lang)}</span>
@@ -314,12 +325,17 @@ function MoreMenu({
                       </span>
                     </span>
                   )}
-                  <span className={styles.moreInfoRow}>
-                    <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.image', lang)}</span>
-                    <span className={styles.moreInfoVal}>
-                      {regenerateInfo.hasSeedImage ? '✓' : t('topbar.regenerate.input.none', lang)}
+                  {regenerateInfo.seedImageUrl && (
+                    <span className={styles.moreInfoRow}>
+                      <span className={styles.moreInfoKey}>{t('topbar.regenerate.input.image', lang)}</span>
+                      <img
+                        src={regenerateInfo.seedImageUrl}
+                        alt=""
+                        className={styles.moreInfoThumb}
+                        onClick={(e) => { e.stopPropagation(); setLightboxUrl(regenerateInfo.seedImageUrl); }}
+                      />
                     </span>
-                  </span>
+                  )}
                 </span>
               </span>
             )}
@@ -408,6 +424,12 @@ function MoreMenu({
             {menuItems}
           </div>
         </BottomSheet>
+      )}
+      {lightboxUrl && createPortal(
+        <div className={styles.lightbox} onClick={() => setLightboxUrl(null)} role="presentation">
+          <img src={lightboxUrl} alt="" className={styles.lightboxImg} />
+        </div>,
+        document.body,
       )}
     </div>
   );
