@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import styles from '../styles/ConfirmModal.module.css';
 
 type Props = {
@@ -25,10 +26,13 @@ export function ConfirmModal({
   const confirmRef = useRef<HTMLButtonElement | null>(null);
 
   // Focus the confirm button on open so Enter immediately confirms.
+  // preventScroll stops the browser from scrolling the (possibly
+  // scrollable) ancestor to bring the button into view — without it,
+  // opening the modal visibly jumps the gallery's scroll position.
   useEffect(() => {
     if (open) {
       // Defer one tick so the DOM is mounted.
-      const t = setTimeout(() => confirmRef.current?.focus(), 0);
+      const t = setTimeout(() => confirmRef.current?.focus({ preventScroll: true }), 0);
       return () => clearTimeout(t);
     }
   }, [open]);
@@ -45,7 +49,11 @@ export function ConfirmModal({
   }, [open, onCancel, onConfirm]);
 
   if (!open) return null;
-  return (
+  // Portal to document.body so the fixed backdrop is positioned relative
+  // to the viewport, not to any scrollable / transformed ancestor (the
+  // gallery grid). Rendering inline would also let an ancestor's
+  // overflow / transform clip or shift the overlay.
+  return createPortal(
     <div className={styles.backdrop} onClick={onCancel} role="presentation">
       <div
         className={styles.modal}
@@ -70,6 +78,7 @@ export function ConfirmModal({
           >{confirmLabel}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
