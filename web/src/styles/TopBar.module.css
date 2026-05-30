@@ -347,13 +347,19 @@
 .moreItem svg { flex-shrink: 0; }
 
 /* Visual on-state for menuitemcheckbox rows. We render the row's leading
-   icon + label in full ink and a small ◆ marker on the right; off-state
-   keeps everything muted. No hint text needed — the icon flips between
-   web-on/off, tag-on/off etc. and the colour shift makes the toggle
-   state legible at a glance. */
+   icon + label in full ink, give it a soft tinted background so it reads
+   as a filled "enabled" chip, and append a small ◆ marker on the right.
+   Off-state keeps everything muted with no fill. No hint text needed —
+   the icon flips between web-on/off, tag-on/off etc. and the colour
+   shift + fill make the toggle state legible at a glance. */
 .moreItem.moreItemOn {
   color: var(--ink);
   font-weight: 500;
+  background: rgba(31, 31, 31, 0.06);
+}
+
+.moreItem.moreItemOn:hover {
+  background: rgba(31, 31, 31, 0.10);
 }
 
 .moreItem.moreItemOn svg { color: var(--ink); }
