@@ -23,7 +23,7 @@ If the prompt provides a `seed_subject` and `seed_description`, those are FACTS 
 ## What you DO change
 
 - **Style**: convert to the project's encyclopedia / isometric-cutaway register (fine line work, soft beige background, muted natural colors, slight elevated angle).
-- **Annotations**: add 20–40 short text fragments (zone headings 2–6 字 + 2–4 callouts per zone, 1–5 字 each) labelling what's already in the source. Place callouts pointing at sub-objects already visible in the user's image.
+- **Annotations**: add 40–70 short text fragments (zone headings 2–6 字 + 4–6 callouts per zone, 1–6 字 each, with frequent numbers/dates/measurements) labelling what's already in the source. Place callouts pointing at sub-objects already visible in the user's image — pack the page densely like a detailed infographic.
 - **Encyclopedia caption**: 150–220 字 dense factual prose about the SUBJECT (drawing on `seed_description`, `seed_features`, and any `sources`). Cite specifics (years, names, measurements) as if writing a museum placard for the subject. Do NOT mention that an image was supplied.
 
 ## image_prompt structure when has_seed_image=true
