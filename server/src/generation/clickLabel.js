@@ -80,18 +80,30 @@ export async function callClickLabel({ parentNode, clickXY, existingLabels, canv
     });
   }
 
+  const nearby = nearbyOcrSpans(parentNode.text_layer, [cx, cy]);
+  // The full parent_image_prompt enumerates every zone heading + callout
+  // label the planner wrote. Feeding it to the click-label model invites
+  // a failure mode where the model — especially if it doesn't actually
+  // read the marker image — just grabs SOME plausible label from that
+  // prose that loosely matches the click region (e.g. returning a label
+  // listed elsewhere in the scene for a click on an unrelated spot).
+  // So we OMIT image_prompt whenever we have a stronger spatial signal
+  // (the marker image and/or nearby OCR). We keep only title + caption
+  // as light scene context. When neither stronger signal exists, we fall
+  // back to including image_prompt so the model has something to go on.
+  const haveStrongSpatialSignal = !!markerPath || nearby.length > 0;
   const inputs = {
     lang: userLang,
     language_instruction: languageInstruction(userLang),
-    parent_image_prompt: parentNode.image_prompt,
     parent_title: parentNode.title,
     parent_caption: parentNode.caption,
+    ...(haveStrongSpatialSignal ? {} : { parent_image_prompt: parentNode.image_prompt }),
     click_xy: [cx, cy],
     // Nearby OCR'd in-image text — strongest spatial signal we have. The
     // model otherwise has to back-infer "what's at xy" from the prose
     // image_prompt, which is unreliable. Spans within 0.18 units of the
     // click, sorted by distance.
-    nearby_text: nearbyOcrSpans(parentNode.text_layer, [cx, cy]),
+    nearby_text: nearby,
     existing_labels: (existingLabels || []).map((h) => ({
       label: h.label,
       anchor_xy: h.anchor_xy,
@@ -109,7 +121,7 @@ export async function callClickLabel({ parentNode, clickXY, existingLabels, canv
     // it alongside the prompt. Plain-text models simply see a path string
     // and ignore it — no harm done.
     promptParts.push('', `## Click marker image`, `@${markerPath}`, '',
-      'A red circled crosshair has been drawn on the parent image at the user\'s click point. Treat this as the strongest possible spatial signal: the subject is whatever is INSIDE or directly UNDER the red circle.');
+      'A red circled crosshair has been drawn on the parent image at the user\'s EXACT click pixel. This is the SINGLE STRONGEST signal. Identify only what is physically INSIDE or directly UNDER the red circle. Do NOT pick a label from elsewhere in the scene just because it appears in the text inputs — name the specific object at that pixel. If the circled area is empty / background with no drillable object, return the rejection shape (confident:false).');
   }
   promptParts.push(
     '',

@@ -386,6 +386,64 @@
   flex-shrink: 0;
 }
 
+/* Info affordance on the Regenerate row — hover/focus reveals a small
+   popover listing the generation inputs that will be replayed. */
+.moreInfo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--muted);
+  flex-shrink: 0;
+  cursor: help;
+}
+
+.moreInfo:hover,
+.moreInfo:focus-visible { color: var(--ink); outline: none; }
+
+.moreInfoPop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -4px;
+  z-index: 50;
+  min-width: 180px;
+  max-width: 240px;
+  padding: 8px 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  white-space: normal;
+  cursor: default;
+}
+
+.moreInfo:hover .moreInfoPop,
+.moreInfo:focus-within .moreInfoPop,
+.moreInfo:focus-visible .moreInfoPop { display: flex; }
+
+.moreInfoRow {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.moreInfoKey {
+  flex-shrink: 0;
+  color: var(--muted);
+  min-width: 56px;
+}
+
+.moreInfoVal {
+  flex: 1;
+  color: var(--ink);
+  word-break: break-word;
+}
+
 /* Mobile */
 @media (max-width: 720px) {
   .topbar { padding: 0 8px; gap: 4px; height: 48px; min-height: 48px; }
