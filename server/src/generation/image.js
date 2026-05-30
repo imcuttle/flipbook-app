@@ -153,6 +153,25 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, seedIm
       //   * the failure carried prose (refusal explanation),
       //   * we haven't repaired already for this provider.
       if (providerAttempt < 2 && !repaired && result?.refusalProse) {
+        // If we had a seed image and the model refused on the EDIT attempt,
+        // the retry below drops the seed (text-to-image). Surface this as a
+        // distinct compliance-risk signal so the pipeline can warn the user
+        // that their uploaded image likely tripped a content policy and we
+        // fell back to generating from the description instead.
+        if (seedImagePath) {
+          // Carry the model's own reason so the user understands WHY the
+          // upload was declined (truncated to keep the toast readable).
+          // Localised to the generation's language.
+          const reason = String(result.refusalProse).replace(/\s+/g, ' ').trim().slice(0, 180);
+          const msg = userLang === 'en'
+            ? (reason
+                ? `Your uploaded image was declined by the image model (possible content-policy issue): ${reason} — generating from its description instead.`
+                : 'Your uploaded image was declined by the image model (possible content-policy issue) — generating from its description instead.')
+            : (reason
+                ? `上传图片被图像模型拒绝(可能涉及内容合规):${reason} — 已改用根据描述生成。`
+                : '上传图片被图像模型拒绝(可能涉及内容合规) — 已改用根据描述生成。');
+          emitPhase('image.seed_refused', msg);
+        }
         emitPhase('image.repair',
           'Image model declined — rewriting the prompt to address its concerns…');
         const newPrompt = await repairImagePrompt({

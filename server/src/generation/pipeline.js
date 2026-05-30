@@ -22,7 +22,7 @@ import { callDecideSearch, stubDecideSearch } from './decideSearch.js';
 import { searchWeb } from './searchWeb.js';
 import { runOcr } from './ocr.js';
 import { describeSeedImage } from './describeSeed.js';
-import { touchLastRun, updateCanvasTopic } from '../store/canvasStore.js';
+import { touchLastRun, updateCanvasTopic, deleteCanvas } from '../store/canvasStore.js';
 import { PlannerRefusalError } from '../lib/errors.js';
 import {
   recordNode, recordHotspot, bumpNodeCount, setCoverIfMissing,
@@ -371,6 +371,18 @@ async function buildAndRegisterNode({
       // done / fallback) into SSE phase_message events so the user can
       // see the LLM-driven prompt-repair retry happen in real time.
       onPhase: ({ phase, message }) => {
+        // Compliance-risk fallback: the uploaded seed image was declined by
+        // the image model and we dropped it for text-to-image. Surface the
+        // model's stated reason to the user as a warn-level toast (not a
+        // hard error — generation continues from the description).
+        if (phase === 'image.seed_refused') {
+          broadcast(canvas, {
+            type: SseEvents.ERROR, canvasId: canvas.id, jobId,
+            phase: 'image', message, code: 'seed_refused', recoverable: true,
+          });
+          genLog(jobId, 'image.seed_refused', message);
+          return;
+        }
         const map = {
           'image.start':    { key: 'phase.image.gen',     fb: message },
           'image.repair':   { key: 'phase.image.repair',  fb: 'Image model declined — refining prompt…' },
@@ -392,9 +404,18 @@ async function buildAndRegisterNode({
     throw e;
   }
   if (imageOutcome.fallback && imageOutcome.reason) {
+    // All real image providers failed and we used the svg placeholder.
+    // Surface a localised, user-readable warning (the technical provider
+    // reasons go to the server log, not the toast).
+    genLog(jobId, 'image.fallback', imageOutcome.reason);
     broadcast(canvas, {
       type: SseEvents.ERROR, canvasId: canvas.id, jobId,
-      phase: 'image', message: imageOutcome.reason, recoverable: true,
+      phase: 'image',
+      code: 'image_fallback',
+      message: lang === 'en'
+        ? 'Image generation failed — showing a placeholder. You can try Re-roll.'
+        : '图片生成失败,已用占位图。可尝试重新生成。',
+      recoverable: true,
     });
   }
 
@@ -746,11 +767,21 @@ export function enqueueRootGeneration(canvas, opts = {}) {
   const lang = opts.lang ?? 'zh';
   genLog(jobId, 'enqueue.root',
     `canvas=${canvas.id} topic="${canvas.topic}"${seedImagePath ? ' (seeded)' : ''}`);
-  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled, seedImagePath, lang }).catch((e) => {
+  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled, seedImagePath, lang }).catch(async (e) => {
     if (e instanceof PlannerRefusalError) {
       log.warn(`[gen ${jobId}] generateRootNode aborted: model refused (${e.message.slice(0, 120)})`);
     } else {
       log.error(`[gen ${jobId}] generateRootNode failed:`, e?.stack || e);
+    }
+    // The root node never materialised, so this canvas is an empty shell
+    // (no cover, no nodes). Delete it entirely rather than leaving a dead
+    // "生成中…" card in the gallery. The gen_error SSE has already been
+    // broadcast to the open client with the failure reason.
+    try {
+      await deleteCanvas(canvas.id);
+      genLog(jobId, 'root.failed', `deleted empty canvas ${canvas.id}`);
+    } catch (delErr) {
+      log.warn(`[gen ${jobId}] failed to delete empty canvas ${canvas.id}: ${delErr?.message}`);
     }
   }));
   return jobId;

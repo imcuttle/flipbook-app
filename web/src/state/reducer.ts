@@ -402,6 +402,22 @@ function applySse(state: AppState, evt: SseEvent): AppState {
 
     case 'gen_error': {
       const id = _toastId++;
+      // seed_refused: the uploaded image was declined by the image model and
+      // we fell back to text-to-image. Generation CONTINUES, so this is a
+      // warn-level toast carrying the model's reason verbatim, and we must
+      // NOT drop the pending click (the image is still coming).
+      if (evt.code === 'seed_refused') {
+        const next: Toast = { id, level: 'warn', message: evt.message };
+        return { ...state, toasts: [...state.toasts, next].slice(-5) };
+      }
+      // image_fallback: providers failed, svg placeholder shown. The server
+      // already localised the message; show it verbatim at warn level. The
+      // node still rendered (placeholder), so don't drop pending here — the
+      // node_ready/done events manage that.
+      if (evt.code === 'image_fallback') {
+        const next: Toast = { id, level: 'warn', message: evt.message };
+        return { ...state, toasts: [...state.toasts, next].slice(-5) };
+      }
       // Refusals (model declined to plan, e.g. content-policy) come through
       // as code=planner_refusal. Store an i18n key instead of the raw
       // model prose so Toast renders in the user's currently selected
