@@ -96,8 +96,11 @@ export const messages: Catalogue = {
   'topbar.lang.zh': { zh: '切换到 English', en: 'Switch to 中文' },
   'topbar.attach': { zh: '附加图片(粘贴或选择)', en: 'Attach image (paste or pick)' },
   'topbar.attach.remove': { zh: '移除图片', en: 'Remove image' },
-  'topbar.compose-on-click.on': { zh: '点击后弹出输入框 (开)', en: 'Compose-on-click (on)' },
-  'topbar.compose-on-click.off': { zh: '点击直接生成 (关)', en: 'Generate immediately (off)' },
+  // Item labels in the More menu — pure noun phrases. The on/off state is
+  // conveyed by the row's icon + checked styling, not by a trailing hint.
+  'topbar.web': { zh: '联网搜索', en: 'Web search' },
+  'topbar.compose-on-click': { zh: '点击弹出输入框', en: 'Compose on click' },
+  'topbar.labels': { zh: '热点标签', en: 'Hotspot labels' },
   'topbar.more': { zh: '更多', en: 'More' },
 
   // Canvas

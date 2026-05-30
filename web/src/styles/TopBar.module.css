@@ -335,16 +335,44 @@
   border-radius: 6px;
   border: 0;
   background: transparent;
-  color: var(--ink);
+  color: var(--muted);
   font: inherit;
   font-size: 12.5px;
   cursor: pointer;
   text-align: left;
 }
 
-.moreItem:hover { background: var(--bg); }
+.moreItem:hover { background: var(--bg); color: var(--ink); }
 
 .moreItem svg { flex-shrink: 0; }
+
+/* Visual on-state for menuitemcheckbox rows. We render the row's leading
+   icon + label in full ink and a small ◆ marker on the right; off-state
+   keeps everything muted. No hint text needed — the icon flips between
+   web-on/off, tag-on/off etc. and the colour shift makes the toggle
+   state legible at a glance. */
+.moreItem.moreItemOn {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.moreItem.moreItemOn svg { color: var(--ink); }
+
+.moreItemLabel {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moreItemState {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
 
 /* Mobile */
 @media (max-width: 720px) {

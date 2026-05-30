@@ -267,39 +267,46 @@ function MoreMenu({
           {onToggleComposeOnClick && (
             <button
               type="button"
-              className={styles.moreItem}
+              className={`${styles.moreItem} ${composeOnClick ? styles.moreItemOn : ''}`}
               role="menuitemcheckbox"
               aria-checked={composeOnClick}
               onClick={() => { onToggleComposeOnClick(); setOpen(false); }}
             >
               <Icon name={composeOnClick ? 'image-plus' : 'submit'} size={14} />
-              <span>{composeOnClick
-                ? t('topbar.compose-on-click.on', lang)
-                : t('topbar.compose-on-click.off', lang)}</span>
+              <span className={styles.moreItemLabel}>{t('topbar.compose-on-click', lang)}</span>
+              <span className={styles.moreItemState} aria-hidden>
+                {composeOnClick ? <Icon name="current" size={10} /> : null}
+              </span>
             </button>
           )}
           {onToggleWebSearch && (
             <button
               type="button"
-              className={styles.moreItem}
+              className={`${styles.moreItem} ${webSearch ? styles.moreItemOn : ''}`}
               role="menuitemcheckbox"
               aria-checked={webSearch}
               onClick={() => { onToggleWebSearch(); setOpen(false); }}
             >
               <Icon name={webSearch ? 'web-on' : 'web-off'} size={14} />
-              <span>{webSearch ? t('topbar.web.on', lang) : t('topbar.web.off', lang)}</span>
+              <span className={styles.moreItemLabel}>{t('topbar.web', lang)}</span>
+              <span className={styles.moreItemState} aria-hidden>
+                {webSearch ? <Icon name="current" size={10} /> : null}
+              </span>
             </button>
           )}
           {onToggleLabels && (
             <button
               type="button"
-              className={styles.moreItem}
+              className={`${styles.moreItem} ${showLabels ? styles.moreItemOn : ''}`}
               role="menuitemcheckbox"
               aria-checked={showLabels}
               onClick={() => { onToggleLabels(); setOpen(false); }}
             >
               <Icon name={showLabels ? 'tag-on' : 'tag-off'} size={14} />
-              <span>{showLabels ? t('topbar.labels.hide', lang) : t('topbar.labels.show', lang)}</span>
+              <span className={styles.moreItemLabel}>{t('topbar.labels', lang)}</span>
+              <span className={styles.moreItemState} aria-hidden>
+                {showLabels ? <Icon name="current" size={10} /> : null}
+              </span>
             </button>
           )}
           <button
@@ -309,7 +316,7 @@ function MoreMenu({
             onClick={() => { setLang(lang === 'zh' ? 'en' : 'zh'); setOpen(false); }}
           >
             <span className={styles.langInline}>{lang === 'zh' ? 'EN' : '中'}</span>
-            <span>{t('topbar.lang.zh', lang)}</span>
+            <span className={styles.moreItemLabel}>{t('topbar.lang.zh', lang)}</span>
           </button>
         </div>
       )}
