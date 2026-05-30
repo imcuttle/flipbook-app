@@ -190,6 +190,19 @@
   .cardTitle { font-size: 13px; }
   .cardMeta { font-size: 11px; }
   .title { font-size: 18px; }
+  /* Header can wrap so the edit-mode action buttons don't overflow on a
+     narrow screen; the buttons themselves shrink to a compact size. */
+  .header { flex-wrap: wrap; gap: 8px; }
+  .headerActions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .editBtn { font-size: 12px; padding: 4px 9px; border-radius: 7px; }
+  .deleteBtn { font-size: 12px; padding: 4px 9px; border-radius: 7px; }
+  /* Smaller selection checkbox on cards. */
+  .checkbox { width: 19px; height: 19px; font-size: 11px; top: 6px; left: 6px; }
+}
+
+@media (max-width: 420px) {
+  .editBtn, .deleteBtn { font-size: 11px; padding: 3px 8px; }
+  .headerActions { gap: 5px; }
 }
 
 /* Infinite-scroll sentinel: a thin strip below the grid that
