@@ -4,6 +4,7 @@ import { loadPrompt } from './prompts.js';
 import { callOnce } from '../codebuddyClient.js';
 import { renderClickMarker } from './clickMarker.js';
 import { PlannerError } from '../lib/errors.js';
+import { languageInstruction, normalizeLang } from './language.js';
 
 function clamp01(n) { return Math.max(0, Math.min(1, Number(n) || 0)); }
 
@@ -57,7 +58,8 @@ function nearbyOcrSpans(textLayer, [cx, cy], { radius = 0.18, limit = 12 } = {})
   return out.slice(0, limit);
 }
 
-export async function callClickLabel({ parentNode, clickXY, existingLabels, canvasId, jobId }) {
+export async function callClickLabel({ parentNode, clickXY, existingLabels, canvasId, jobId, lang = 'zh' }) {
+  const userLang = normalizeLang(lang);
   const promptText = await loadPrompt('click-label.md');
   const cx = clamp01(clickXY[0]);
   const cy = clamp01(clickXY[1]);
@@ -79,6 +81,8 @@ export async function callClickLabel({ parentNode, clickXY, existingLabels, canv
   }
 
   const inputs = {
+    lang: userLang,
+    language_instruction: languageInstruction(userLang),
     parent_image_prompt: parentNode.image_prompt,
     parent_title: parentNode.title,
     parent_caption: parentNode.caption,
@@ -94,7 +98,12 @@ export async function callClickLabel({ parentNode, clickXY, existingLabels, canv
       leader_xy: h.leader_xy,
     })),
   };
-  const promptParts = [promptText];
+  const promptParts = [
+    '## User language requirement',
+    languageInstruction(userLang),
+    '',
+    promptText,
+  ];
   if (markerPath) {
     // Include the @-reference up front so any vision-capable model loads
     // it alongside the prompt. Plain-text models simply see a path string

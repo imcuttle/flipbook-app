@@ -89,7 +89,16 @@ export type GenStatus =
   | { phase: 'image_loading'; jobId?: string; hash: string }
   | { phase: 'ready' };
 
-export type Toast = { id: number; level: 'info' | 'warn' | 'error'; message: string };
+export type Toast = {
+  id: number;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  // Optional i18n key resolved at render time, so toast language follows
+  // the user's current language selection instead of freezing whatever
+  // language the server/model happened to return.
+  messageKey?: string;
+  messageVars?: Record<string, string | number>;
+};
 
 export type GalleryEntry = {
   canvasId: string;

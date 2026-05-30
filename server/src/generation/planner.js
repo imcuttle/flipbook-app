@@ -2,6 +2,7 @@
 import { loadPrompt, loadPrompts } from './prompts.js';
 import { callOnce } from '../codebuddyClient.js';
 import { PlannerError } from '../lib/errors.js';
+import { languageInstruction, normalizeLang } from './language.js';
 
 export function validatePlannerOutput(raw) {
   if (!raw || typeof raw !== 'object') throw new PlannerError('planner output not an object');
@@ -16,7 +17,8 @@ export function validatePlannerOutput(raw) {
   };
 }
 
-export async function callPlanner({ topic, path = [], currentLabel = '', depth = 0, maxDepth = 99, sources = [], seedImagePath = null, seedDescription = null }) {
+export async function callPlanner({ topic, path = [], currentLabel = '', depth = 0, maxDepth = 99, sources = [], seedImagePath = null, seedDescription = null, lang = 'zh' }) {
+  const userLang = normalizeLang(lang);
   const { system, planner } = await loadPrompts();
   // When a seed image is attached, layer in the image-extend prompt
   // addendum which forces preservation of the user's content/composition.
@@ -36,6 +38,8 @@ export async function callPlanner({ topic, path = [], currentLabel = '', depth =
     sources: sources.slice(0, 12).map((s) => ({
       title: s.title, url: s.url, snippet: s.snippet, source: s.source,
     })),
+    lang: userLang,
+    language_instruction: languageInstruction(userLang),
     has_seed_image: !!seedImagePath,
     // The describe-first step's structured read of what's actually
     // pictured. The planner's caption/title MUST be about this subject,
@@ -45,7 +49,15 @@ export async function callPlanner({ topic, path = [], currentLabel = '', depth =
     seed_description: seedDescription?.description || null,
     seed_features: seedDescription?.key_features || null,
   };
-  const parts = [system, '', plannerBody, ''];
+  const parts = [
+    system,
+    '',
+    '## User language requirement',
+    languageInstruction(userLang),
+    '',
+    plannerBody,
+    '',
+  ];
   if (seedImagePath) {
     parts.push(
       '## Seed image',

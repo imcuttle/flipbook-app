@@ -4,13 +4,14 @@ const API = '/api';
 
 export async function createCanvas(
   topic: string,
-  opts: { webSearch?: boolean; image?: File | Blob | null } = {},
+  opts: { webSearch?: boolean; image?: File | Blob | null; lang?: 'zh' | 'en' } = {},
 ): Promise<{ canvasId: string; jobId: string }> {
   // When the user attaches an image, switch to multipart so the server's
   // /upload variant kicks in and seeds the canvas with the user's picture.
   if (opts.image) {
     const fd = new FormData();
     fd.append('topic', topic);
+    fd.append('lang', opts.lang ?? 'zh');
     if (opts.webSearch === false) fd.append('webSearch', '0');
     fd.append('image', opts.image, 'seed.png');
     const res = await fetch(`${API}/canvas/upload`, { method: 'POST', body: fd });
@@ -20,7 +21,7 @@ export async function createCanvas(
   const res = await fetch(`${API}/canvas`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic, webSearch: opts.webSearch }),
+    body: JSON.stringify({ topic, webSearch: opts.webSearch, lang: opts.lang ?? 'zh' }),
   });
   if (!res.ok) throw new Error(`createCanvas failed: ${res.status}`);
   return res.json();
@@ -32,7 +33,7 @@ export async function clickAt(
   parentHash: string,
   x: number,
   y: number,
-  opts: { webSearch?: boolean; label?: string | null; image?: File | Blob | null } = {},
+  opts: { webSearch?: boolean; label?: string | null; image?: File | Blob | null; lang?: 'zh' | 'en' } = {},
 ): Promise<{ jobId: string; queue: { active: number; pending: number; max: number } }> {
   // Multipart variant when there's a label override or attached image.
   if (opts.image || (opts.label && opts.label.trim())) {
@@ -40,6 +41,7 @@ export async function clickAt(
     fd.append('parentHash', parentHash);
     fd.append('x', String(x));
     fd.append('y', String(y));
+    fd.append('lang', opts.lang ?? 'zh');
     if (opts.webSearch === false) fd.append('webSearch', '0');
     if (opts.label && opts.label.trim()) fd.append('label', opts.label.trim());
     if (opts.image) fd.append('image', opts.image, 'click.png');
@@ -53,7 +55,7 @@ export async function clickAt(
   const res = await fetch(`${API}/canvas/${canvasId}/click`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ parentHash, x, y, webSearch: opts.webSearch }),
+    body: JSON.stringify({ parentHash, x, y, webSearch: opts.webSearch, lang: opts.lang ?? 'zh' }),
   });
   if (!res.ok) {
     const txt = await res.text();
@@ -137,13 +139,13 @@ export async function deleteNode(
 export async function regenerateNode(
   canvasId: string,
   hash: string,
-  opts: { webSearch?: boolean } = {},
+  opts: { webSearch?: boolean; lang?: 'zh' | 'en' } = {},
 ): Promise<{ ok: boolean; deletedHashes: string[]; parentHash: string | null }> {
-  const body = opts.webSearch === undefined ? null : { webSearch: opts.webSearch };
+  const body = { lang: opts.lang ?? 'zh', ...(opts.webSearch === undefined ? {} : { webSearch: opts.webSearch }) };
   const res = await fetch(`${API}/canvas/${canvasId}/nodes/${hash}/regenerate`, {
     method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const txt = await res.text();

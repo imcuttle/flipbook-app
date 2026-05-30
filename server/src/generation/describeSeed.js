@@ -14,8 +14,7 @@
 // All fields are model-best-effort. Falls back to safe defaults on parse failure.
 import { callOnce } from '../codebuddyClient.js';
 import { log } from '../lib/log.js';
-
-function isCJK(s) { return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(s || ''); }
+import { normalizeLang } from './language.js';
 
 function safeStr(v, max = 240) {
   return String(v ?? '').slice(0, max);
@@ -26,14 +25,12 @@ function safeStrArr(v, maxItems = 6, maxLen = 160) {
   return v.map((s) => safeStr(s, maxLen).trim()).filter(Boolean).slice(0, maxItems);
 }
 
-export async function describeSeedImage({ seedImagePath, userTopic }) {
+export async function describeSeedImage({ seedImagePath, userTopic, lang = 'zh' }) {
   if (!seedImagePath) return null;
-  // Detect language preference from the user's topic when present;
-  // otherwise default to bilingual neutral and let the LLM pick.
-  const cn = isCJK(userTopic ?? '');
-  const langDirective = cn
-    ? '所有文本输出请用中文。'
-    : 'Reply in the same language as the dominant text in the image; default to English when neutral.';
+  const userLang = normalizeLang(lang);
+  const langDirective = userLang === 'en'
+    ? 'All JSON string values must be in English, including subject, description, key_features, suggested_topic, and search_queries.'
+    : '所有 JSON 字符串值都必须使用中文,包括 subject、description、key_features、suggested_topic 和 search_queries。';
   const prompt = [
     'You are inspecting a user-supplied source image and producing a STRUCTURED summary that downstream steps will use to build an annotated encyclopedia-style flipbook page.',
     '',

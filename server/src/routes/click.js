@@ -7,6 +7,7 @@ import { deleteNodeCascade } from '../generation/deleteNode.js';
 import { regenerateNode } from '../generation/regenerateNode.js';
 import { cancelHotspot } from '../generation/cancelHotspot.js';
 import { uploadMemory, persistUpload } from './upload.js';
+import { normalizeLang } from '../generation/language.js';
 import { nanoid } from 'nanoid';
 
 export const clickRouter = express.Router();
@@ -15,6 +16,7 @@ export const clickRouter = express.Router();
 clickRouter.post('/:id/click', async (req, res) => {
   const { id } = req.params;
   const { parentHash, x, y, webSearch } = req.body || {};
+  const lang = normalizeLang(req.body?.lang);
   if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
   if (!isSafeHash(parentHash)) return res.status(400).json({ error: 'bad_parent_hash' });
   const cx = Number(x);
@@ -31,7 +33,7 @@ clickRouter.post('/:id/click', async (req, res) => {
   // webSearch is an opt-out boolean; default true.
   const webSearchEnabled = webSearch !== false;
   const result = enqueueClickExpansion(runtime, {
-    parentNode, clickXY: [cx, cy], webSearchEnabled,
+    parentNode, clickXY: [cx, cy], webSearchEnabled, lang,
   });
   res.status(202).json({
     jobId: result.jobId,
@@ -70,6 +72,7 @@ clickRouter.delete('/:id/nodes/:hash', async (req, res) => {
 //   when the toggle has been flipped since the original generation.
 clickRouter.post('/:id/nodes/:hash/regenerate', async (req, res) => {
   const { id, hash } = req.params;
+  const lang = normalizeLang(req.body?.lang);
   if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
   if (!isSafeHash(hash)) return res.status(400).json({ error: 'bad_hash' });
   const runtime = await getCanvas(id);
@@ -84,7 +87,7 @@ clickRouter.post('/:id/nodes/:hash/regenerate', async (req, res) => {
         ? true
         : undefined;
   try {
-    const result = await regenerateNode(runtime, hash, { webSearchEnabled });
+    const result = await regenerateNode(runtime, hash, { webSearchEnabled, lang });
     if (!result.ok) return res.status(404).json({ error: 'regenerate_failed', reason: result.reason });
     res.status(202).json(result);
   } catch (e) {
@@ -123,6 +126,7 @@ clickRouter.post('/:id/click/upload', uploadMemory.single('image'), async (req, 
   const x = Number(req.body?.x);
   const y = Number(req.body?.y);
   const userLabel = (req.body?.label ?? '').toString().trim() || null;
+  const lang = normalizeLang(req.body?.lang);
   const webSearchEnabled = req.body?.webSearch !== '0' && req.body?.webSearch !== false;
   if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
   if (!isSafeHash(parentHash)) return res.status(400).json({ error: 'bad_parent_hash' });
@@ -146,7 +150,7 @@ clickRouter.post('/:id/click/upload', uploadMemory.single('image'), async (req, 
   }
   const result = enqueueClickExpansion(runtime, {
     parentNode, clickXY: [x, y], webSearchEnabled,
-    seedImagePath, userLabel,
+    seedImagePath, userLabel, lang,
   });
   res.status(202).json({
     jobId: result.jobId,

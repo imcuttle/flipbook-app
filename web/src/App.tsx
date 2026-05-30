@@ -232,6 +232,7 @@ export default function App() {
       const { canvasId } = await createCanvas(topic, {
         webSearch: state.webSearch,
         image: topicAttachment?.file ?? null,
+        lang,
       });
       // Sync the in-memory topic to whatever the server stored. When only
       // an image was uploaded, the server uses '__pending__' as a sentinel
@@ -251,7 +252,7 @@ export default function App() {
     } finally {
       setSubmitting(false);
     }
-  }, [draftTopic, state.readOnly, state.webSearch, topicAttachment, submitting]);
+  }, [draftTopic, state.readOnly, state.webSearch, topicAttachment, submitting, lang]);
 
   const onImageClick = useCallback(async (xy: [number, number]) => {
     if (state.readOnly) return;
@@ -264,7 +265,7 @@ export default function App() {
       return;
     }
     try {
-      const r = await clickAt(state.canvasId, state.currentHash, xy[0], xy[1], { webSearch: state.webSearch });
+      const r = await clickAt(state.canvasId, state.currentHash, xy[0], xy[1], { webSearch: state.webSearch, lang });
       dispatch({
         type: 'click_pending_local',
         jobId: r.jobId,
@@ -274,7 +275,7 @@ export default function App() {
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Click failed: ${(e as Error).message}` } });
     }
-  }, [state.canvasId, state.currentHash, state.readOnly, state.webSearch, composeOnClick]);
+  }, [state.canvasId, state.currentHash, state.readOnly, state.webSearch, composeOnClick, lang]);
 
   // Submit handler for the floating click composer panel.
   const submitClickComposer = useCallback(async (
@@ -288,6 +289,7 @@ export default function App() {
         webSearch: state.webSearch,
         label: label || null,
         image: image?.file ?? null,
+        lang,
       });
       dispatch({
         type: 'click_pending_local',
@@ -300,7 +302,7 @@ export default function App() {
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Click failed: ${(e as Error).message}` } });
     }
-  }, [state.canvasId, state.currentHash, state.readOnly, state.webSearch]);
+  }, [state.canvasId, state.currentHash, state.readOnly, state.webSearch, lang]);
 
   const cancelClickComposer = useCallback(() => {
     setClickComposer(null);
@@ -441,7 +443,7 @@ export default function App() {
       // Pass the current toggle state — webSearch for the regen pass is
       // the user's CURRENT intent, not whatever was persisted on the
       // node from its original generation.
-      await regenerateNode(state.canvasId, hash, { webSearch: state.webSearch });
+      await regenerateNode(state.canvasId, hash, { webSearch: state.webSearch, lang });
       dispatch({ type: 'add_toast', toast: { level: 'info', message: `${title} · ${t('toast.regenerating', lang)}` } });
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Regenerate failed: ${(e as Error).message}` } });

@@ -22,15 +22,20 @@
 // behaviour you had before".
 import { callOnce } from '../codebuddyClient.js';
 import { log } from '../lib/log.js';
+import { languageInstruction, normalizeLang } from './language.js';
 
 function safeStr(v, max = 4000) {
   return String(v ?? '').slice(0, max);
 }
 
-export async function repairImagePrompt({ originalPrompt, refusalProse, seedDescription, jobId }) {
+export async function repairImagePrompt({ originalPrompt, refusalProse, seedDescription, jobId, lang = 'zh' }) {
   if (!originalPrompt || !refusalProse) return null;
+  const userLang = normalizeLang(lang);
   const prompt = [
     'You are repairing an image-generation prompt that the image model refused to render. Your job is to produce a rewritten prompt that addresses the model\'s stated reason for refusal while preserving the encyclopedia-style intent (5+ visual zones with rich annotations, isometric cutaway register, factual museum-placard tone).',
+    '',
+    '## User language requirement',
+    languageInstruction(userLang),
     '',
     '## Original prompt',
     safeStr(originalPrompt, 6000),

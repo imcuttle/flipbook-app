@@ -379,11 +379,20 @@ function applySse(state: AppState, evt: SseEvent): AppState {
     case 'gen_error': {
       const id = _toastId++;
       // Refusals (model declined to plan, e.g. content-policy) come through
-      // as code=planner_refusal. Show the model's prose verbatim at warn
-      // level — it's not a server bug, the model just said no.
+      // as code=planner_refusal. Store an i18n key instead of the raw
+      // model prose so Toast renders in the user's currently selected
+      // language (Chinese UI gets Chinese refusal copy, English UI gets
+      // English). Keep raw message as fallback / title context.
       const isRefusal = evt.code === 'planner_refusal';
       const msg = isRefusal ? evt.message : `${evt.phase}: ${evt.message}`;
-      const next: Toast = { id, level: isRefusal ? 'warn' : 'error', message: msg };
+      const next: Toast = isRefusal
+        ? {
+            id,
+            level: 'warn',
+            message: msg,
+            messageKey: 'toast.planner.refusal',
+          }
+        : { id, level: 'error', message: msg };
       let s: AppState = { ...state, toasts: [...state.toasts, next].slice(-5) };
       s = dropPending(s, evt.jobId);
       return s;

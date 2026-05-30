@@ -3,6 +3,7 @@ import { createCanvas, getCanvas, listCanvases } from '../store/canvasStore.js';
 import { readTree } from '../store/treeStore.js';
 import { isSafeId } from '../store/paths.js';
 import { enqueueRootGeneration } from '../generation/pipeline.js';
+import { normalizeLang } from '../generation/language.js';
 import { uploadMemory, persistUpload } from './upload.js';
 
 export const canvasRouter = express.Router();
@@ -29,6 +30,7 @@ canvasRouter.get('/', async (req, res) => {
 
 canvasRouter.post('/', async (req, res) => {
   const { topic, branches, webSearch } = req.body || {};
+  const lang = normalizeLang(req.body?.lang);
   if (!topic || typeof topic !== 'string' || !topic.trim()) {
     return res.status(400).json({ error: 'topic_required' });
   }
@@ -36,7 +38,7 @@ canvasRouter.post('/', async (req, res) => {
     const runtime = await createCanvas({ topic: topic.trim(), branches: Number(branches) || 5 });
     // webSearch is an opt-out boolean; default true.
     const webSearchEnabled = webSearch !== false;
-    const jobId = enqueueRootGeneration(runtime, { webSearchEnabled });
+    const jobId = enqueueRootGeneration(runtime, { webSearchEnabled, lang });
     res.status(201).json({
       canvasId: runtime.id,
       eventsUrl: `/api/canvas/${runtime.id}/events`,
@@ -54,6 +56,7 @@ canvasRouter.post('/', async (req, res) => {
 canvasRouter.post('/upload', uploadMemory.single('image'), async (req, res) => {
   const topicRaw = (req.body?.topic ?? '').toString();
   const topic = topicRaw.trim();
+  const lang = normalizeLang(req.body?.lang);
   // Topic is optional when an image is supplied — but we still need a
   // string to seed the canvas slug, so fall back to a sentinel that the
   // client localises into "内容生成中… / Content generating…". The
@@ -71,7 +74,7 @@ canvasRouter.post('/upload', uploadMemory.single('image'), async (req, res) => {
     if (file) {
       seedImagePath = await persistUpload(runtime.id, 'seed', file);
     }
-    const jobId = enqueueRootGeneration(runtime, { webSearchEnabled, seedImagePath });
+    const jobId = enqueueRootGeneration(runtime, { webSearchEnabled, seedImagePath, lang });
     res.status(201).json({
       canvasId: runtime.id,
       eventsUrl: `/api/canvas/${runtime.id}/events`,

@@ -166,6 +166,7 @@ async function buildAndRegisterNode({
   // and click position on the host parent. Persisted on the node JSON
   // as `gen_inputs`.
   genInputs = null,
+  lang = 'zh',
 }) {
   const depth = parentNode ? (parentNode.depth ?? 0) + 1 : 0;
   const startedAt = Date.now();
@@ -190,6 +191,7 @@ async function buildAndRegisterNode({
       seedDescription = await describeSeedImage({
         seedImagePath,
         userTopic: canvas.topic,
+        lang,
       });
       if (seedDescription?.suggested_topic) {
         genLog(jobId, 'seed.describe',
@@ -276,6 +278,7 @@ async function buildAndRegisterNode({
       sources,
       seedImagePath,
       seedDescription,
+      lang,
     });
     genLog(jobId, 'planner',
       `→ "${plannerJson.title}" (caption ${plannerJson.caption.length}c, image_prompt ${plannerJson.image_prompt.length}c, ${Date.now() - tPlanner}ms)`);
@@ -349,6 +352,7 @@ async function buildAndRegisterNode({
       title: plannerJson.title, imagePrompt: plannerJson.image_prompt,
       seedImagePath,
       seedDescription,
+      lang,
       // Forward image-orchestrator phase events (start / repair / retry /
       // done / fallback) into SSE phase_message events so the user can
       // see the LLM-driven prompt-repair retry happen in real time.
@@ -468,6 +472,7 @@ export async function generateRootNode(canvas, args = {}) {
     currentLabel: '', hashSeed: canvas.topic,
     webSearchEnabled: args.webSearchEnabled,
     seedImagePath: args.seedImagePath ?? null,
+    lang: args.lang ?? 'zh',
   });
   broadcast(canvas, {
     type: SseEvents.DONE, canvasId: canvas.id, jobId, hash: node.hash, cacheHit,
@@ -478,7 +483,7 @@ export async function generateRootNode(canvas, args = {}) {
 // --------- Public: click → label → child node + parent hotspot append ---------
 export async function expandFromClick(canvas, args = {}) {
   const jobId = args.jobId || nanoid(8);
-  const { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel } = args;
+  const { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel, lang = 'zh' } = args;
   if (!parentNode || !Array.isArray(clickXY)) throw new Error('parentNode and clickXY required');
 
   genLog(jobId, 'click',
@@ -545,6 +550,7 @@ export async function expandFromClick(canvas, args = {}) {
       existingLabels: parentNode.hotspots ?? [],
       canvasId: canvas.id,
       jobId,
+      lang,
     });
     if (labelOut.rejected) {
       genLog(jobId, 'label.llm', `→ REJECTED (${Date.now() - tLabel}ms): ${labelOut.reason}`);
@@ -619,6 +625,7 @@ export async function expandFromClick(canvas, args = {}) {
     webSearchEnabled,
     seedImagePath,
     genInputs,
+    lang,
   });
 
   // 4) Link child on parent's hotspot — re-read inside the lock to avoid
@@ -660,9 +667,10 @@ export function enqueueRootGeneration(canvas, opts = {}) {
   const jobId = nanoid(8);
   const webSearchEnabled = opts.webSearchEnabled !== false; // default on
   const seedImagePath = opts.seedImagePath ?? null;
+  const lang = opts.lang ?? 'zh';
   genLog(jobId, 'enqueue.root',
     `canvas=${canvas.id} topic="${canvas.topic}"${seedImagePath ? ' (seeded)' : ''}`);
-  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled, seedImagePath }).catch((e) => {
+  canvas.queue.enqueue(() => generateRootNode(canvas, { jobId, webSearchEnabled, seedImagePath, lang }).catch((e) => {
     if (e instanceof PlannerRefusalError) {
       log.warn(`[gen ${jobId}] generateRootNode aborted: model refused (${e.message.slice(0, 120)})`);
     } else {
@@ -675,7 +683,7 @@ export function enqueueRootGeneration(canvas, opts = {}) {
 // Click expansions: capped at MAX_PARALLEL_CLICKS_PER_NODE per (canvas, parent).
 // Different parents and different canvases run in parallel. Excess clicks are
 // queued in arrival order until a slot frees up.
-export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel }) {
+export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEnabled, seedImagePath, userLabel, lang = 'zh' }) {
   const jobId = nanoid(8);
   const key = clickKey(canvas.id, parentNode.hash);
   const enabled = webSearchEnabled !== false; // default on
@@ -691,6 +699,7 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
     webSearchEnabled: enabled,
     seedImagePath: seedImagePath ?? null,
     userLabel: userLabel ?? null,
+    lang,
   }))
     .catch((e) => {
       if (e instanceof PlannerRefusalError) {

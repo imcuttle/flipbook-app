@@ -56,6 +56,7 @@ export async function regenerateNode(canvas, hash, opts = {}) {
     enqueueRootGeneration(canvas, {
       webSearchEnabled,
       seedImagePath: node.gen_inputs?.seed_image ?? node.seed_image ?? null,
+      lang: opts.lang ?? 'zh',
     });
     return { ok: true, deletedHashes: [hash, ...childHashes], parentHash: null };
   }
@@ -99,6 +100,7 @@ export async function regenerateNode(canvas, hash, opts = {}) {
     webSearchEnabled,
     seedImagePath,
     userLabel,
+    lang: opts.lang ?? 'zh',
   });
   return {
     ok: true,
