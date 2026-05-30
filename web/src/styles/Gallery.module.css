@@ -175,28 +175,26 @@
   font-size: 12px;
   color: var(--muted);
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
-  /* Span the full card width so space-between actually pushes the
-     node-count to the left edge and the time to the right edge. */
   width: 100%;
-  /* Keep a minimum gap so the node-count and the relative-time never butt
-     up against each other on a narrow card; both stay on one line. */
   gap: 10px;
   white-space: nowrap;
-  /* Pin to the bottom of the (flex:1) body so the meta row is on the same
-     baseline across all cards in a row, regardless of whether the title
-     is one or two lines — gives a clean head/tail-aligned bottom strip. */
   margin-top: auto;
 }
 
-/* Node count can ellipsize if extremely long; time stays intact on the right. */
+/* Node count sits at the row head; let it shrink/ellipsize if very long. */
 .cardMeta > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
-.cardMeta > span:last-child { flex-shrink: 0; }
+/* Time is pushed to the row tail via auto left margin — robust regardless
+   of how the flex container sizes (doesn't rely on justify-content +
+   full-width quirks). flex-shrink:0 keeps it whole. */
+.cardMeta > span:last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+}
 
 .empty {
   flex: 1;
