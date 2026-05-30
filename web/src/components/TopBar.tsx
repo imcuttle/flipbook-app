@@ -71,12 +71,7 @@ export function TopBar(props: Props) {
 
   const onFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const sel = selectionFromFileList(e.target.files);
-    if (sel) {
-      onAttachmentChange(sel);
-      // Move focus to the topic input so the user can immediately type a
-      // topic / hit Enter to submit without an extra click.
-      inputRef.current?.focus();
-    }
+    if (sel) onAttachmentChange(sel);
     // Reset so the same file can be picked again after removal.
     e.target.value = '';
   };
