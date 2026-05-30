@@ -78,6 +78,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -151,7 +152,10 @@
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
   /* Fill the card's stretched height (grid stretches all cards to the
      tallest in the row) so the meta row can pin to the bottom edge. */
   flex: 1;
@@ -161,6 +165,7 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--ink);
+  width: 100%;
   /* Long root titles wrap to at most two lines, then ellipsize. */
   display: -webkit-box;
   -webkit-line-clamp: 2;
