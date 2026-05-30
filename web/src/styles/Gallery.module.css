@@ -152,23 +152,22 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Fill the card's stretched height (grid stretches all cards to the
+     tallest in the row) so the meta row can pin to the bottom edge. */
+  flex: 1;
 }
 
 .cardTitle {
   font-size: 15px;
   font-weight: 600;
   color: var(--ink);
-  /* Long root titles wrap to at most two lines, then ellipsize — so a
-     verbose planner title doesn't blow out the card height or overlap
-     the meta row. Reserve a fixed two-line block so the meta row below
-     aligns across cards whether the title is one or two lines. */
+  /* Long root titles wrap to at most two lines, then ellipsize. */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.35;
-  min-height: calc(2 * 1.35em);
   word-break: break-word;
 }
 
@@ -177,6 +176,10 @@
   color: var(--muted);
   display: flex;
   justify-content: space-between;
+  /* Pin to the bottom of the (flex:1) body so the meta row is on the same
+     baseline across all cards in a row, regardless of whether the title
+     is one or two lines — gives a clean head/tail-aligned bottom strip. */
+  margin-top: auto;
 }
 
 .empty {
