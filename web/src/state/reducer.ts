@@ -305,17 +305,25 @@ function applySse(state: AppState, evt: SseEvent): AppState {
     case 'node_deleted': {
       // Remove deleted node hashes from state.nodes and from state.tree.
       const deleted = new Set(evt.deletedHashes);
+      const cancelledLabel = evt.cancelledHotspot?.label ?? null;
+      const cancelledParent = evt.cancelledHotspot?.parentHash ?? null;
       const nodes: Record<string, Node> = {};
       for (const [h, n] of Object.entries(state.nodes)) {
         if (deleted.has(h)) continue;
-        // Also strip stale hotspots from surviving parents — the server
-        // rewrites the parent JSON on disk, but our in-memory copy still
-        // holds a hotspot whose next_hash points at a deleted node. Without
-        // this filter the parent's HotspotCard stays visible until the
-        // user navigates away and back.
-        const hotspots = (n.hotspots ?? []).filter(
-          (h) => !h.next_hash || !deleted.has(h.next_hash),
-        );
+        // Strip stale hotspots from surviving parents — both linked
+        // (next_hash points at a deleted node) and pending (matched by
+        // (parentHash, label) for the cancel-hotspot path where there's
+        // no real child hash yet).
+        const hotspots = (n.hotspots ?? []).filter((hot) => {
+          if (hot.next_hash && deleted.has(hot.next_hash)) return false;
+          if (
+            cancelledLabel
+            && cancelledParent === h
+            && !hot.next_hash
+            && hot.label === cancelledLabel
+          ) return false;
+          return true;
+        });
         nodes[h] = hotspots.length === (n.hotspots ?? []).length ? n : { ...n, hotspots };
       }
       let tree = state.tree;
@@ -338,7 +346,34 @@ function applySse(state: AppState, evt: SseEvent): AppState {
       }
       let rootHash = state.rootHash;
       if (rootHash && deleted.has(rootHash)) rootHash = null;
-      return { ...state, nodes, tree, currentHash, rootHash };
+      // Drop any pendingClick whose parent matches the cancelled hotspot
+      // and whose XY is near the cancelled hotspot's leader_xy. Without
+      // this the spinner bubble keeps pulsing forever after cancel.
+      let pendingClicks = state.pendingClicks;
+      let pendingByParent = state.pendingByParent;
+      if (cancelledParent && evt.cancelledHotspot?.leaderXY) {
+        const [lx, ly] = evt.cancelledHotspot.leaderXY;
+        const drop: string[] = [];
+        for (const [jobId, pc] of Object.entries(state.pendingClicks)) {
+          if (pc.parentHash !== cancelledParent) continue;
+          const dx = pc.clickXY[0] - lx;
+          const dy = pc.clickXY[1] - ly;
+          if (Math.hypot(dx, dy) <= 0.06) drop.push(jobId);
+        }
+        if (drop.length) {
+          pendingClicks = { ...state.pendingClicks };
+          for (const j of drop) delete pendingClicks[j];
+          const arr = (state.pendingByParent[cancelledParent] ?? []).filter((j) => !drop.includes(j));
+          pendingByParent = { ...state.pendingByParent };
+          if (arr.length) pendingByParent[cancelledParent] = arr;
+          else delete pendingByParent[cancelledParent];
+        }
+      }
+      return {
+        ...state,
+        nodes, tree, currentHash, rootHash,
+        pendingClicks, pendingByParent,
+      };
     }
 
     case 'gen_error': {

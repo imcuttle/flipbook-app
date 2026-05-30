@@ -6,3 +6,4 @@ web/dist/
 .env
 .env.local
 *.tsbuildinfo
+

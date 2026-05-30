@@ -42,14 +42,17 @@ export const HotspotCard = forwardRef<HTMLButtonElement, Props>(function Hotspot
     >
       {!linked && <span className={styles.spinner} aria-hidden />}
       <span className={styles.label}>{hotspot.label}</span>
-      {/* Delete ✕ button, only visible on card hover. Stops propagation so
-          clicking it doesn't navigate into the child node. */}
-      {onDelete && linked && (
+      {/* Delete ✕ button. For LINKED hotspots (real child node generated)
+          this is the destructive cascade-delete path. For PENDING ones
+          (still generating, next_hash null) it's a "cancel this in-flight
+          click" — same affordance, the App-side handler distinguishes
+          the two cases. Only hidden in read-only / preview mode. */}
+      {onDelete && (
         <span
           className={styles.delete}
           role="button"
           tabIndex={0}
-          aria-label={`Delete ${hotspot.label}`}
+          aria-label={linked ? `Delete ${hotspot.label}` : `Cancel ${hotspot.label}`}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -64,7 +67,7 @@ export const HotspotCard = forwardRef<HTMLButtonElement, Props>(function Hotspot
               onDelete(index);
             }
           }}
-          title="Delete this branch / 删除该分支"
+          title={linked ? 'Delete this branch / 删除该分支' : 'Cancel this generation / 取消生成'}
         >
           <Icon name="close" size={11} strokeWidth={2.5} />
         </span>

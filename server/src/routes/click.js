@@ -5,6 +5,7 @@ import { readNode, nodeExists } from '../store/nodeStore.js';
 import { enqueueClickExpansion } from '../generation/pipeline.js';
 import { deleteNodeCascade } from '../generation/deleteNode.js';
 import { regenerateNode } from '../generation/regenerateNode.js';
+import { cancelHotspot } from '../generation/cancelHotspot.js';
 import { uploadMemory, persistUpload } from './upload.js';
 import { nanoid } from 'nanoid';
 
@@ -88,6 +89,26 @@ clickRouter.post('/:id/nodes/:hash/regenerate', async (req, res) => {
     res.status(202).json(result);
   } catch (e) {
     res.status(500).json({ error: 'regenerate_failed', message: e?.message });
+  }
+});
+
+// POST /api/canvas/:id/nodes/:parentHash/hotspots/:index/cancel
+//   Drop a still-generating hotspot from the parent. The in-flight
+//   generation job will finish on its own and write an orphan child
+//   that boot-time sweep cleans up next restart — the user just stops
+//   seeing the pending bubble.
+clickRouter.post('/:id/nodes/:parentHash/hotspots/:index/cancel', async (req, res) => {
+  const { id, parentHash, index } = req.params;
+  if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
+  if (!isSafeHash(parentHash)) return res.status(400).json({ error: 'bad_parent_hash' });
+  const runtime = await getCanvas(id);
+  if (!runtime) return res.status(404).json({ error: 'canvas_not_found' });
+  try {
+    const result = await cancelHotspot(runtime, parentHash, index);
+    if (!result.ok) return res.status(404).json({ error: 'cancel_failed', reason: result.reason });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: 'cancel_failed', message: e?.message });
   }
 });
 

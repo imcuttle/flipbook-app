@@ -10,7 +10,7 @@ import { Gallery } from './components/Gallery';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ClickComposer } from './components/ClickComposer';
 import { useCanvasSSE } from './hooks/useCanvasSSE';
-import { createCanvas, clickAt, getNode, getTree, createShareLink, resolveShareLink, deleteNode, regenerateNode } from './lib/api';
+import { createCanvas, clickAt, getNode, getTree, createShareLink, resolveShareLink, deleteNode, regenerateNode, cancelHotspot } from './lib/api';
 import { useLang, t, displayTopic } from './lib/i18n';
 import { revokeSelection, type ImageSelection } from './lib/imageUpload';
 
@@ -348,10 +348,25 @@ export default function App() {
     if (!state.currentHash || !state.canvasId) return;
     const node = state.nodes[state.currentHash];
     const hot = node?.hotspots?.[index];
-    if (!hot?.next_hash) return;
+    if (!hot) return;
+    // Pending hotspot (still generating) — no descendants, no real child
+    // node yet. Skip the confirm modal and just call the cancel API; the
+    // server drops the parent's hotspots[] entry and broadcasts a
+    // node_deleted SSE so the reducer prunes any speculative state.
+    if (!hot.next_hash) {
+      const parentHash = state.currentHash;
+      cancelHotspot(state.canvasId, parentHash, index)
+        .then(() => {
+          dispatch({ type: 'add_toast', toast: { level: 'info', message: `${hot.label} · ${t('toast.cancelled', lang)}` } });
+        })
+        .catch((e) => {
+          dispatch({ type: 'add_toast', toast: { level: 'error', message: `Cancel failed: ${(e as Error).message}` } });
+        });
+      return;
+    }
     const childHash = hot.next_hash;
-    // Count descendants under this hash from tree.nodes for the confirm
-    // body. Walk children iteratively.
+    // Linked hotspot — open the confirm modal and surface the descendant
+    // count, since this cascade-deletes children/grandchildren too.
     let descendantCount = 1;
     const treeNodes = state.tree?.nodes;
     if (treeNodes) {
@@ -367,7 +382,7 @@ export default function App() {
       descendantCount = seen.size;
     }
     setDeleteTarget({ hash: childHash, label: hot.label, descendantCount });
-  }, [state.canvasId, state.currentHash, state.nodes, state.readOnly, state.tree]);
+  }, [state.canvasId, state.currentHash, state.nodes, state.readOnly, state.tree, lang]);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget || !state.canvasId) {

@@ -151,3 +151,23 @@ export async function regenerateNode(
   }
   return res.json();
 }
+
+// Cancel a still-generating hotspot (next_hash null). The in-flight
+// generation job runs to completion server-side and the orphan gets
+// swept on next restart — but the parent's hotspots[] entry is dropped
+// immediately, so the user stops seeing the pending bubble.
+export async function cancelHotspot(
+  canvasId: string,
+  parentHash: string,
+  hotspotIndex: number,
+): Promise<{ ok: boolean; parentHash: string; hotspotIndex: number; deletedHashes: string[]; label: string | null }> {
+  const res = await fetch(
+    `${API}/canvas/${canvasId}/nodes/${parentHash}/hotspots/${hotspotIndex}/cancel`,
+    { method: 'POST' },
+  );
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`cancel failed: ${res.status} ${txt}`);
+  }
+  return res.json();
+}

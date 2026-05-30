@@ -171,6 +171,7 @@ export const messages: Catalogue = {
   'toast.create.failed': { zh: '创建失败', en: 'Create failed' },
   'toast.delete.failed': { zh: '删除失败', en: 'Delete failed' },
   'toast.deleted': { zh: '已删除', en: 'Deleted' },
+  'toast.cancelled': { zh: '已取消生成', en: 'Generation cancelled' },
   'toast.regenerating': { zh: '已重新加入生成队列', en: 'Re-queued for generation' },
   'toast.share.copied': { zh: '分享链接已复制', en: 'Share link copied' },
   'toast.share.fallback': { zh: '分享链接', en: 'Share link' },

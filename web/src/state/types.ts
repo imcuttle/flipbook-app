@@ -79,7 +79,7 @@ export type SseEvent =
   | { type: 'phase_message'; canvasId: string; jobId: string; messageKey: string; messageEn: string }
   | { type: 'gen_error'; canvasId: string; jobId: string; phase: 'plan' | 'image' | 'register'; message: string; recoverable: boolean; code?: string }
   | { type: 'click_rejected'; canvasId: string; jobId: string; parentHash: string; clickXY: [number, number]; reason: string }
-  | { type: 'node_deleted'; canvasId: string; hash: string; deletedHashes: string[]; parentHash: string | null }
+  | { type: 'node_deleted'; canvasId: string; hash: string; deletedHashes: string[]; parentHash: string | null; cancelledHotspot?: { parentHash: string; label: string | null; anchorXY: [number, number] | null; leaderXY: [number, number] | null } }
   | { type: 'done'; canvasId: string; jobId: string; hash: string; cacheHit: boolean };
 
 // UI-only types
