@@ -241,8 +241,23 @@
 @media (max-width: 720px) {
   .title { font-size: 18px; margin: 6px 0 2px; }
   .caption { font-size: 13px; line-height: 1.45; padding: 0 4px; }
-  .pendingLabel span:first-child { display: none; }  /* keep just CN line */
-  .pendingLabel { font-size: 10px; padding: 3px 8px; }
+  /* Pending bubble on phones: shrink the chip, allow the streamed phase
+     line to wrap up to two short rows. We previously hid the first span
+     to keep the EN line off small screens — but the bubble now renders
+     a single child carrying the localised phase message, so hiding it
+     made the label disappear entirely. */
+  .pendingLabel {
+    font-size: 10px;
+    padding: 3px 8px;
+    max-width: min(60vw, 220px);
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    line-height: 1.3;
+  }
   /* Read-only chip shrinks proportionally on small screens — the inline
      style sets the corner anchoring; the translate() inset tightens so
      the chip stays inside the painted image. */
@@ -251,6 +266,11 @@
 }
 
 @media (max-width: 480px) {
+  .pendingLabel {
+    max-width: min(58vw, 180px);
+    font-size: 9.5px;
+    padding: 2px 7px;
+  }
   .readOnlyBadge { width: 20px; height: 20px; transform: translate(-4px, 4px); }
   .readOnlyBadge svg { width: 10px; height: 10px; }
 }
