@@ -40,10 +40,23 @@
   aspect-ratio: 9 / 16;
 }
 
+/* Mobile: on an INTERACTIVE stage, long-press is our drilldown gesture, so
+   suppress iOS Safari's long-press text-selection / copy callout across the
+   whole stage surface (the image + any text near the press). Read-only /
+   preview stages keep selection so viewers can still copy + save. The
+   `:not(.stageReadOnly)` guard scopes this to interactive canvases. */
+@media (max-width: 720px) {
+  .stage:not(.stageReadOnly) {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
 /* Scene transitions — driven by `key={node.hash}` on the stage so each new
    node is a fresh DOM element with the entrance animation re-applied. */
 .stage.enterDrill {
-  animation: drillIn 480ms cubic-bezier(0.22, 0.8, 0.32, 1) both;
+  animation: drillIn 560ms cubic-bezier(0.16, 0.84, 0.28, 1) both;
 }
 
 .stage.enterUp {
@@ -55,16 +68,22 @@
 }
 
 @keyframes drillIn {
-  /* Zoom into the click point: start as a small bright pinhole at (originX,originY),
-     expand to fill the whole stage. transform-origin is set inline. */
+  /* Zoom into the click point: start as a tiny bright pinhole at
+     (originX,originY), rush outward to fill the stage with a slight
+     overshoot so the "diving in" reads with impact. transform-origin is set
+     inline to the click point. */
   0% {
     opacity: 0;
-    transform: scale(0.04);
-    filter: blur(6px) brightness(1.15);
+    transform: scale(0.02);
+    filter: blur(10px) brightness(1.25);
   }
-  60% {
+  55% {
     opacity: 1;
-    filter: blur(0) brightness(1.05);
+    filter: blur(0) brightness(1.06);
+  }
+  82% {
+    transform: scale(1.035);
+    filter: none;
   }
   100% {
     opacity: 1;
@@ -74,9 +93,9 @@
 }
 
 @keyframes drillOut {
-  /* Coming back up the breadcrumb: subtle pull-out. */
-  0% { opacity: 0; transform: scale(1.12); }
-  100% { opacity: 1; transform: scale(1); }
+  /* Coming back up the breadcrumb: pull out from a slight zoom-in. */
+  0% { opacity: 0; transform: scale(1.16); filter: blur(3px); }
+  100% { opacity: 1; transform: scale(1); filter: none; }
 }
 
 @keyframes fadeIn {
@@ -323,6 +342,19 @@
   .readOnlyBadge svg { width: 11px; height: 11px; }
   .enlargeBtn { width: 26px; height: 26px; bottom: 10px; right: 10px; }
   .enlargeBtn svg { width: 14px; height: 14px; }
+  /* Inference dot is oversized on a phone — shrink the dot, its static halo
+     and the pulse expansion so it reads as a neat marker, not a blob. */
+  .pendingDot {
+    width: 9px;
+    height: 9px;
+    box-shadow: 0 0 0 4px rgba(31, 31, 31, 0.18);
+    animation: pulseMobile 1.6s ease-out infinite;
+  }
+}
+
+@keyframes pulseMobile {
+  0%   { box-shadow: 0 0 0 0 rgba(31,31,31,0.4); }
+  100% { box-shadow: 0 0 0 10px rgba(31,31,31,0); }
 }
 
 @media (max-width: 480px) {

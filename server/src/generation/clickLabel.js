@@ -49,6 +49,18 @@ export function validateClickLabel(raw, { click_xy }) {
       reason: 'could not infer a clean label for this spot',
     };
   }
+  // Defensive guard: the red crosshair/circle is a synthetic overlay the
+  // software draws to point at the click — it is NOT part of the scene. If
+  // the model named the marker itself (instead of the underlying subject),
+  // reject so we never surface "红色准星 / red crosshair" as a hotspot label
+  // or seed the child prompt with it.
+  const namesMarker = /红色?(准星|准心|圆圈|圈|标记|十字|准星标记)|准星|crosshair|red\s+(circle|ring|dot|marker|crosshair|target)|\bmarker\b|reticle/i;
+  if (namesMarker.test(labelStr) || namesMarker.test(String(next_prompt ?? ''))) {
+    return {
+      rejected: true,
+      reason: 'could not infer a clean label for this spot',
+    };
+  }
   const ax = Array.isArray(anchor_xy) ? [clamp01(anchor_xy[0]), clamp01(anchor_xy[1])] : [clamp01(click_xy[0] + 0.1), clamp01(click_xy[1] + 0.05)];
   const lx = Array.isArray(leader_xy) ? [clamp01(leader_xy[0]), clamp01(leader_xy[1])] : [clamp01(click_xy[0]), clamp01(click_xy[1])];
   return {
@@ -148,7 +160,8 @@ export async function callClickLabel({ parentNode, clickXY, existingLabels, canv
     // it alongside the prompt. Plain-text models simply see a path string
     // and ignore it — no harm done.
     promptParts.push('', `## Click marker image`, `@${markerPath}`, '',
-      'A red circled crosshair has been drawn on the parent image at the user\'s EXACT click pixel. This is the SINGLE STRONGEST signal. Identify only what is physically INSIDE or directly UNDER the red circle. Do NOT pick a label from elsewhere in the scene just because it appears in the text inputs — name the specific object at that pixel. If the circled area is empty / background with no drillable object, return the rejection shape (confident:false).');
+      'A red circled crosshair has been drawn on the parent image at the user\'s EXACT click pixel. This is the SINGLE STRONGEST signal. Identify only what is physically INSIDE or directly UNDER the red circle. Do NOT pick a label from elsewhere in the scene just because it appears in the text inputs — name the specific object at that pixel. If the circled area is empty / background with no drillable object, return the rejection shape (confident:false).'
+      + ' CRITICAL: the red circle / crosshair / marker is a SYNTHETIC overlay added by the software purely to point at the click — it is NOT part of the picture. NEVER name, mention, or describe the red marker (no "红色准星", "red crosshair", "red circle", "marker", "标记", etc.) in `label` or `next_prompt`. Describe ONLY the real underlying subject it sits on. If the marker covers nothing but background, reject with confident:false.');
   }
   promptParts.push(
     '',

@@ -396,11 +396,28 @@ async function buildAndRegisterNode({
     // page. Warn the user their image was dropped for compliance reasons.
     if (isRefusal && seedImagePath) {
       genLog(jobId, 'planner.seed_refused', 'planner refused with seed — retrying text-only');
+      const fallbackTopic = (effectiveSubject && effectiveSubject !== '__pending__')
+        ? effectiveSubject
+        : (canvas.topic && canvas.topic !== '__pending__' ? canvas.topic : (currentLabel || ''));
+      // No usable material to fall back ON: the seed image was refused, the
+      // describe step produced no scene description, AND there's no real
+      // topic (image-only canvas). Generating from nothing yields a garbage
+      // placeholder page (e.g. title "请提供主题"). Abort gracefully with a
+      // clear, user-facing message instead.
+      const haveSceneDesc = !!(seedDescription && (seedDescription.subject || seedDescription.description));
+      if (!fallbackTopic.trim() && !haveSceneDesc) {
+        const msg = lang === 'en'
+          ? 'This image can’t be processed (its content was declined) and no topic was provided. Please try a different image or enter a topic.'
+          : '该图片无法处理（内容被拒绝），且未提供主题。请换一张图片，或填写一个主题。';
+        genLog(jobId, 'planner.seed_refused', '→ no topic + no scene description — aborting gracefully');
+        broadcast(canvas, {
+          type: SseEvents.ERROR, canvasId: canvas.id, jobId,
+          phase: 'plan', message: msg, code: 'seed_refused_no_fallback', recoverable: false,
+        });
+        throw new PlannerRefusalError(msg);
+      }
       emitComplianceToast(canvas, jobId, lang, e.message);
       try {
-        const fallbackTopic = (effectiveSubject && effectiveSubject !== '__pending__')
-          ? effectiveSubject
-          : (canvas.topic && canvas.topic !== '__pending__' ? canvas.topic : (currentLabel || ''));
         // Drop the seed IMAGE (can't image-edit it) but KEEP the scene
         // description (subject/description/features) so the text-driven
         // page still recreates the uploaded scene — e.g. the Forbidden

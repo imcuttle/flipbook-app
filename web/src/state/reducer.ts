@@ -456,6 +456,16 @@ function applySse(state: AppState, evt: SseEvent): AppState {
       // language (Chinese UI gets Chinese refusal copy, English UI gets
       // English). Keep raw message as fallback / title context.
       const isRefusal = evt.code === 'planner_refusal';
+      // seed_refused_no_fallback: the uploaded image was declined AND there
+      // was no topic / scene description to fall back on, so generation was
+      // aborted. The server already localised a clear message — show it
+      // verbatim at warn level with no "phase:" prefix.
+      if (evt.code === 'seed_refused_no_fallback') {
+        const next: Toast = { id, level: 'warn', message: evt.message };
+        let s: AppState = { ...state, toasts: [...state.toasts, next].slice(-5) };
+        s = dropPending(s, evt.jobId);
+        return { ...s, status: { phase: 'idle' }, rootProgress: null };
+      }
       const msg = isRefusal ? evt.message : `${evt.phase}: ${evt.message}`;
       const next: Toast = isRefusal
         ? {

@@ -17,6 +17,7 @@
 // was a thing.
 import { readNode, nodeExists } from '../store/nodeStore.js';
 import { readTree } from '../store/treeStore.js';
+import { updateCanvasTopic } from '../store/canvasStore.js';
 import { deleteNodeCascade } from './deleteNode.js';
 import { enqueueClickExpansion, enqueueRootGeneration } from './pipeline.js';
 import { log } from '../lib/log.js';
@@ -52,6 +53,21 @@ export async function regenerateNode(canvas, hash, opts = {}) {
       await deleteNodeCascade(canvas, hash);
     } catch (e) {
       log.warn(`regenerate root: delete root ${hash}: ${e?.message}`);
+    }
+    // Restore the ORIGINAL topic input before re-running the planner. After
+    // the first generation, the planner overwrote canvas.topic with the
+    // inferred title (pipeline.js updateCanvasTopic). If we re-rolled with
+    // that, an image-only canvas (user_topic=null) would suddenly gain a
+    // topic it never had — and a text canvas would drift to the inferred
+    // title instead of the user's words. node.gen_inputs.user_topic holds
+    // the real original (null ⇒ image-only ⇒ restore the '__pending__'
+    // sentinel). Legacy nodes without gen_inputs keep canvas.topic as-is.
+    const gi = node.gen_inputs ?? null;
+    let originalTopic = null;
+    if (gi && 'user_topic' in gi) {
+      originalTopic = gi.user_topic ?? '__pending__';
+      canvas.topic = originalTopic;
+      try { await updateCanvasTopic(canvas.id, originalTopic); } catch { /* non-fatal; planner re-titles */ }
     }
     enqueueRootGeneration(canvas, {
       webSearchEnabled,

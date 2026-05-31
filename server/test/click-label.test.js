@@ -58,3 +58,21 @@ test('accepts a clean multi-word label with punctuation', () => {
   assert.equal(out.rejected, undefined);
   assert.equal(out.label, '混凝土基座 (C30)');
 });
+
+test('rejects when the label names the synthetic red marker', () => {
+  // The red crosshair/circle is a software overlay pointing at the click —
+  // never part of the scene. If the model named the marker instead of the
+  // real subject under it, reject so it never becomes a hotspot label.
+  assert.equal(validateClickLabel({ label: '红色准星标记' }, CLICK).rejected, true);
+  assert.equal(validateClickLabel({ label: 'red crosshair' }, CLICK).rejected, true);
+  assert.equal(validateClickLabel({ label: 'red circle marker' }, CLICK).rejected, true);
+  // Also reject when the marker leaks into next_prompt even if label is ok.
+  assert.equal(
+    validateClickLabel({ label: '屋顶瓦片', next_prompt: 'the red crosshair marker area' }, CLICK).rejected,
+    true,
+  );
+  // A legitimate red object that is NOT the marker should still pass.
+  const ok = validateClickLabel({ label: '红色灯笼' }, CLICK);
+  assert.equal(ok.rejected, undefined);
+  assert.equal(ok.label, '红色灯笼');
+});

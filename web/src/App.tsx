@@ -564,14 +564,18 @@ export default function App() {
     state.status.phase === 'image_loading' && state.status.hash === currentNode?.hash;
 
   // Decide scene-transition mode for the current node based on previous one.
-  // We only emit a transition class on the FIRST render where currentHash flips
-  // — subsequent re-renders for the same node keep enterMode='none' so SSE
-  // events / image loads don't replay the entrance animation.
+  // The transition must fire when the node's IMAGE becomes visible — not the
+  // instant currentHash flips. Drilling navigates to a child whose image is
+  // usually still loading (the stage shows a shimmer); if we animated then,
+  // the zoom would play on a blank placeholder and be over before the picture
+  // arrives. So we gate both the enterMode computation and the "animated"
+  // bookkeeping on the image being present.
   const prevHashRef = useRef<string | null>(null);
   const animatedHashRef = useRef<string | null>(null);
+  const hasVisibleImage = !!currentNode?.image;
   let enterMode: 'drill' | 'up' | 'fade' | 'none' = 'none';
   let originXY: [number, number] | undefined;
-  if (currentNode && animatedHashRef.current !== currentNode.hash) {
+  if (currentNode && hasVisibleImage && animatedHashRef.current !== currentNode.hash) {
     const prev = prevHashRef.current;
     if (!prev) {
       enterMode = 'fade';
@@ -587,18 +591,20 @@ export default function App() {
     }
   }
 
-  // After render, mark the current hash as animated so we won't re-apply the
-  // transition class on subsequent re-renders for the same node.
+  // After render, mark the current hash as animated (and advance prevHash)
+  // ONLY once its image is visible — so the entrance animation is committed
+  // to the moment the picture actually appears, and prevHash keeps pointing
+  // at the node we drilled FROM until then (needed to pick drill vs up).
   useEffect(() => {
-    if (currentNode) {
+    if (currentNode && hasVisibleImage) {
       animatedHashRef.current = currentNode.hash;
       prevHashRef.current = currentNode.hash;
       if (state.lastDrillFrom) {
-        const t = setTimeout(() => dispatch({ type: 'consume_drill_origin' }), 600);
+        const t = setTimeout(() => dispatch({ type: 'consume_drill_origin' }), 700);
         return () => clearTimeout(t);
       }
     }
-  }, [currentNode?.hash, state.lastDrillFrom]);
+  }, [currentNode?.hash, hasVisibleImage, state.lastDrillFrom]);
 
   // Filter pending clicks down to those whose parent === current node
   const pendingForNode = currentNode
