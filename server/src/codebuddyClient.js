@@ -290,11 +290,24 @@ export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs, ta
     // Dump a diagnostic file so the failure mode is recoverable from disk.
     try {
       const dumpPath = `/tmp/flipbook-planner-fail-${Date.now()}.log`;
+      const diag = diagnoseStdout(lastStdout, lastStderr, lastErr);
+      // Collapse long base64 / whitespace-free runs (image echo) so the dump
+      // doesn't get swallowed by the input_image data and we can actually
+      // see the tail where the model's `result` should be. Each run >200
+      // chars is replaced by a "[…N chars elided…]" marker.
+      const collapsed = (lastStdout || '').replace(
+        /[A-Za-z0-9+/=]{200,}/g,
+        (m) => `[…${m.length} base64/alnum chars elided…]`,
+      );
       await fs.writeFile(
         dumpPath,
         [
           `# planner failure (tag=${tag}): ${lastErr?.message ?? 'unknown'}`,
           `# exit: ${lastExitInfo ? `code=${lastExitInfo.code} signal=${lastExitInfo.signal ?? '-'}` : 'n/a'}`,
+          `# diag: rawStdoutLen=${(lastStdout || '').length} topParse=${diag.topParse}`
+            + ` resultLen=${diag.resultLen} gibberish=${diag.gibberish} maxRun=${diag.maxRun}`
+            + ` alnumRatio=${diag.alnumRatio} truncated=${diag.truncated}`
+            + (diag.usage ? ` tokens=${diag.usage}` : ''),
           '',
           '## prompt (truncated to 4k):',
           (prompt ?? '').slice(0, 4000),
@@ -302,10 +315,10 @@ export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs, ta
           '## stderr (truncated to 4k):',
           (lastStderr || '').slice(0, 4000),
           '',
-          // Bumped to 64k so we capture the full codebuddy stdout for any
-          // realistic failure (typical successful outputs are ~30k).
-          '## last stdout (truncated to 64k):',
-          lastStdout.slice(0, 64_000),
+          // stdout with base64 echo runs collapsed; bumped to 200k so the
+          // model's actual reply (after the elided image echo) is captured.
+          '## last stdout (base64 runs elided, truncated to 200k):',
+          collapsed.slice(0, 200_000),
         ].join('\n'),
       );
       log.warn(`[${tag}] callOnce dumped failure to ${dumpPath}`);
