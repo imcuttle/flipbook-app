@@ -17,7 +17,7 @@ export function validatePlannerOutput(raw) {
   };
 }
 
-export async function callPlanner({ topic, path = [], currentLabel = '', depth = 0, maxDepth = 99, sources = [], seedImagePath = null, seedDescription = null, lang = 'zh' }) {
+export async function callPlanner({ topic, userNote = null, path = [], currentLabel = '', depth = 0, maxDepth = 99, sources = [], seedImagePath = null, seedDescription = null, lang = 'zh' }) {
   const userLang = normalizeLang(lang);
   const { system, planner } = await loadPrompts();
   // When a seed image is attached, layer in the image-extend prompt
@@ -31,6 +31,10 @@ export async function callPlanner({ topic, path = [], currentLabel = '', depth =
   }
   const inputs = {
     topic,
+    // The user's free-form note / focus instruction, kept separate from the
+    // (possibly image-derived) `topic` subject so it isn't lost. May ask to
+    // focus on part of the image or set tone/audience. null = no note.
+    user_note: userNote || null,
     path: path.map((p) => ({ title: p.title })),
     current_label: currentLabel,
     depth,

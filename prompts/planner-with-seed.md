@@ -20,13 +20,13 @@ Instead, write directly about the SUBJECT. If the image shows a pineapple bun, t
 
 If the prompt provides a `seed_subject` and `seed_description`, those are FACTS about the subject — incorporate them as if you'd looked up the subject yourself, not as meta-narration.
 
-## Honour the user's `topic` as a focus / note
+## Honour the user's `user_note` as a focus / note
 
-The `topic` may not be a subject — it may be a **focus instruction or note about the image** (e.g. "只讲解图里左下角的旗杆" / "重点说这道菜的食材" / "讲给小朋友听"). When it reads as such:
+`user_note` (when present) is the user's instruction about THIS image — often a **focus** (e.g. "只讲解图里左下角的旗杆" / "重点说这道菜的食材") or a tone/audience note ("讲给小朋友听"). When it reads as a focus:
 - KEEP the seed image's subject and composition (the hard rules above still apply), but
-- BIAS the title, caption emphasis, and the densest annotations toward the part / aspect the user called out. If they point at a specific region, make that region the focal zone with the richest callouts.
-- If the `topic` is just a tone/audience note, fold it into the register/scope; don't print it literally.
-Never echo the `topic` note verbatim as the title.
+- BIAS the title, caption emphasis, and the densest annotations toward the part / aspect `user_note` calls out. If it points at a specific region, make that region the focal zone with the richest callouts.
+- If `user_note` is just a tone/audience note, fold it into the register/scope; don't print it literally.
+Never echo `user_note` verbatim as the title.
 
 ## What you DO change
 

@@ -5,11 +5,11 @@ Your job is to produce a dense, factually-grounded title / caption / image
 prompt that primes a richly-annotated diagram and a substantial reading text.
 
 ## Inputs
-- `topic` — the user's free-form intent / note for this page. **It is NOT necessarily a clean subject title.** It may be:
-  - a subject (e.g. "故宫", "菠萝包") — treat as the page subject;
-  - a focus / framing instruction, especially with a seed image (e.g. "只讲解图里左下角的旗杆", "重点说这道菜的食材") — then keep the seed subject but FOCUS the page on the part the user calls out;
-  - a vague note or angle (e.g. "讲讲历史就行", "面向小学生") — fold it into tone/scope, don't print it literally as the title.
-  Infer the real subject from `topic` + seed image; never echo the note verbatim as the title.
+- `topic` — the inferred subject of this page (with a seed image this is the image's subject; otherwise the user's words). Use it as the page subject.
+- `user_note` — the user's free-form note / focus instruction, kept separate from `topic` so it is never lost. **When present, it OVERRIDES how you frame the page:**
+  - a focus instruction (e.g. "只讲解图里左下角的旗杆", "重点说这道菜的食材") → keep the subject, but make THAT part/aspect the focal zone with the title, caption emphasis and densest annotations centred on it;
+  - a tone/audience note (e.g. "讲给小朋友听", "面向工程师") → fold it into register/scope/vocabulary;
+  - never echo `user_note` verbatim as the title.
 - `path` — ancestors from root to this node, each `{title}`
 - `current_label` — hotspot label that led here (empty for root)
 - `depth` — current depth (0 for root)

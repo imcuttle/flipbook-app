@@ -300,6 +300,18 @@ async function buildAndRegisterNode({
     || seedDescription?.suggested_topic
     || canvas.topic;
 
+  // The user's free-form note/intent (distinct from the image-derived
+  // subject). When a seed image is attached, `effectiveSubject` becomes the
+  // image's subject — but the user may have typed a FOCUS instruction or
+  // note (e.g. "只讲左下角的旗杆"). We must keep that and pass it to the
+  // planner separately so it isn't lost behind the image subject. Root uses
+  // canvas.topic; child nodes carry it via currentLabel only, so userNote is
+  // a root-level concept. '__pending__' / empty means "no note".
+  const userNote = (!parentNode && canvas.topic && canvas.topic !== '__pending__'
+    && canvas.topic !== effectiveSubject)
+    ? canvas.topic
+    : null;
+
   // Optional web-search step before planner. With a seed image, prefer
   // the model's image-derived queries over the decide-search default
   // (the default would search for the upload's filename / placeholder
@@ -362,6 +374,7 @@ async function buildAndRegisterNode({
   try {
     plannerJson = await plannerCall({
       topic: effectiveSubject,
+      userNote,
       path: parentNode?.path ?? [],
       currentLabel: currentLabel ?? '',
       depth,
@@ -392,8 +405,11 @@ async function buildAndRegisterNode({
         // description (subject/description/features) so the text-driven
         // page still recreates the uploaded scene — e.g. the Forbidden
         // City backdrop — minus the refused element (the real person).
+        // Also keep the user's focus note so the fallback still honours
+        // "只讲左下角的旗杆" etc. instead of a generic page.
         plannerJson = await plannerCall({
           topic: fallbackTopic,
+          userNote,
           path: parentNode?.path ?? [],
           currentLabel: currentLabel ?? '',
           depth,
