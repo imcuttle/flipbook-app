@@ -5,6 +5,7 @@ import { listCanvasesPage, deleteCanvases } from '../lib/api';
 import { useLang, t, format, displayTopic } from '../lib/i18n';
 import type { Lang } from '../lib/i18n';
 import { ConfirmModal } from './ConfirmModal';
+import { ProgressiveImage } from './ProgressiveImage';
 
 type Props = {
   onOpen: (canvasId: string) => void;
@@ -247,7 +248,14 @@ export function Gallery({ onOpen, refreshKey }: Props) {
                     </span>
                   )}
                   {e.coverImage ? (
-                    <img className={styles.cover} src={e.coverImage} alt={shownTopic} draggable={false} />
+                    <ProgressiveImage
+                      className={styles.cover}
+                      src={e.coverImage}
+                      alt={shownTopic}
+                      target="thumb"
+                      objectFit="cover"
+                      draggable={false}
+                    />
                   ) : (
                     <div className={styles.coverPlaceholder}>{t('gallery.cover.generating', lang)}</div>
                   )}

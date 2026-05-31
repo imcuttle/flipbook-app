@@ -31,7 +31,7 @@ export function useCanvasSSE(canvasId: string | null, onEvent: (evt: SseEvent) =
         'planning_started',
         'search_started', 'search_done',
         'planner_done',
-        'image_started', 'image_ready',
+        'image_started', 'image_ready', 'variants_ready',
         'ocr_done',
         'node_ready', 'tree_updated',
         'click_rejected', 'node_deleted',

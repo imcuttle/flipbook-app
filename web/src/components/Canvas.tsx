@@ -9,6 +9,7 @@ import { TextLayer } from './TextLayer';
 import { Icon } from './Icon';
 import { ImageLightbox } from './ImageLightbox';
 import { CaptionMarkdown } from './CaptionMarkdown';
+import { ProgressiveImage } from './ProgressiveImage';
 import { imageUrl } from '../lib/api';
 import { clamp01, pct } from '../lib/geometry';
 import { layOutHotspots } from '../lib/layout';
@@ -362,7 +363,16 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
         {hasImage && (
           isSvg
             ? <object className={styles.imageSvg} data={src} type="image/svg+xml" aria-label={node?.title ?? ''} />
-            : <img ref={imgRef} className={styles.image} src={src} alt={node?.title ?? ''} draggable={false} />
+            : <ProgressiveImage
+                imgRef={imgRef}
+                className={styles.image}
+                src={src}
+                alt={node?.title ?? ''}
+                target="medium"
+                upgradeToFull
+                objectFit="contain"
+                draggable={false}
+              />
         )}
         {/* Enlarge / view-image affordance. Shown on mobile (where there's no
             hover and the image fills a small screen) once a real raster image

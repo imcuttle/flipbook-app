@@ -1,0 +1,47 @@
+/* Blur-up progressive image. The wrap fills its container; both the blur
+   placeholder and the sharp image are absolutely stacked so they line up.
+   Callers size the wrap (e.g. gallery .cover, canvas .image slot). */
+.wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.blur,
+.sharp {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  -webkit-user-drag: none;
+  /* Suppress iOS long-press save/callout — long-press is the drilldown
+     gesture on the canvas, and gallery cards are buttons. The dedicated
+     image lightbox is where saving happens. */
+  -webkit-touch-callout: none;
+}
+
+.fitCover { object-fit: cover; }
+.fitContain { object-fit: contain; }
+
+/* The LQIP is tiny; upscaling it needs an extra CSS blur to stay smooth, and
+   a slight scale to hide the blurred edges bleeding in. Starts transparent
+   (like .sharp) so a blocked/broken blur never flashes a broken-image glyph
+   before its onError fires; fades in via .sharpVisible once decoded. */
+.blur {
+  filter: blur(12px);
+  transform: scale(1.06);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+/* The sharp image fades in once decoded. */
+.sharp {
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.sharpVisible {
+  opacity: 1;
+}

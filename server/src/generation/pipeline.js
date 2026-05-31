@@ -21,6 +21,8 @@ import { stubPlannerOutput, stubClickLabel } from './stubPlanner.js';
 import { callDecideSearch, stubDecideSearch } from './decideSearch.js';
 import { searchWeb } from './searchWeb.js';
 import { runOcr } from './ocr.js';
+import { generateImageVariants, probeImageSize } from './imageVariants.js';
+import { isHashCancelled } from './cancelRegistry.js';
 import { describeSeedImage } from './describeSeed.js';
 import { repairTopic } from './repairTopic.js';
 import { touchLastRun, updateCanvasTopic, deleteCanvas } from '../store/canvasStore.js';
@@ -647,31 +649,26 @@ async function buildAndRegisterNode({
     imageUrl, fallback: imageOutcome.fallback === true,
   });
 
-  // OCR pass — only for real PNGs (skip the SVG placeholder fallback). Failure
-  // is non-fatal: we just don't get a selectable text overlay for this node.
-  let textLayer = [];
+  const isRealPng = imageOutcome.ext === 'png' && !imageOutcome.fallback;
+
+  // Image dimensions used to come from OCR. OCR is now async (below), so we
+  // probe them up-front via sharp metadata so the node's first paint
+  // letterboxes correctly without waiting on OCR.
   let imageW;
   let imageH;
-  if (imageOutcome.ext === 'png' && !imageOutcome.fallback) {
-    const ocr = await runOcr({ imagePath: paths.imagePath(canvas.id, hash, 'png') });
-    if (ocr.ok) {
-      textLayer = ocr.spans;
-      imageW = ocr.imageW;
-      imageH = ocr.imageH;
-    } else if (ocr.reason && ocr.reason !== 'ocr disabled') {
-      log.warn(`[ocr] ${canvas.id}/${hash}: ${ocr.reason}`);
-    }
-    broadcast(canvas, {
-      type: SseEvents.OCR_DONE, canvasId: canvas.id, jobId, hash,
-      spanCount: textLayer.length,
-    });
+  if (isRealPng) {
+    const dim = await probeImageSize(canvas.id, hash);
+    if (dim) { imageW = dim.width; imageH = dim.height; }
   }
 
+  // Register + broadcast the node IMMEDIATELY with an empty text_layer — we
+  // no longer block node_ready on OCR. The selectable text overlay arrives
+  // later via an async OCR pass that re-writes the node and re-broadcasts.
   const node = {
     ...skeleton,
     image: imageRel,
     generated_at: new Date().toISOString(),
-    text_layer: textLayer,
+    text_layer: [],
     ...(imageW && imageH ? { image_w: imageW, image_h: imageH } : {}),
   };
   await registerNode(canvas.id, node);
@@ -696,7 +693,6 @@ async function buildAndRegisterNode({
     await bumpNodeCount(canvas.id);
     if (!parentNode) await setCoverIfMissing(canvas.id, hash, imageUrl);
     if (sources.length) await recordSources(canvas.id, hash, sources);
-    if (textLayer.length) await recordTextSpans(canvas.id, hash, textLayer);
   } catch (e) { log.warn('db recordNode:', e?.message); }
 
   broadcast(canvas, { type: SseEvents.NODE_READY, canvasId: canvas.id, jobId, hash, node });
@@ -704,6 +700,62 @@ async function buildAndRegisterNode({
   broadcast(canvas, { type: SseEvents.TREE_UPDATED, canvasId: canvas.id, jobId, treeNodeCount: total });
   genLog(jobId, 'done',
     `${hash} "${node.title}" — ${Date.now() - startedAt}ms total | tree=${total} nodes`);
+
+  // ---- Async post-processing (fire-and-forget; never blocks the response) ----
+  // Both run only for real PNGs (the SVG fallback has no useful variants/OCR).
+  // Failures are non-fatal and logged; the node already exists and rendered.
+  if (isRealPng) {
+    // 1) Progressive-loading variants (blur/thumb/medium). On completion,
+    //    tell the client which variants exist so it can swap blur → thumb/
+    //    medium → full-res.
+    generateImageVariants(canvas.id, hash)
+      .then((r) => {
+        // Node deleted while variants were generating — don't broadcast a
+        // resurrected reference (the variant files were already unlinked by
+        // the cascade, or will be moot).
+        if (isHashCancelled(canvas.id, hash)) return;
+        if (r.ok) {
+          broadcast(canvas, {
+            type: SseEvents.VARIANTS_READY, canvasId: canvas.id, jobId, hash,
+            variants: r.variants,
+          });
+        }
+      })
+      .catch((e) => log.warn(`[variants] ${canvas.id}/${hash}: ${e?.message}`));
+
+    // 2) OCR — produces the selectable text overlay. When done, persist the
+    //    spans, re-write the node JSON with text_layer, and silently push an
+    //    updated node_ready so the overlay appears without a reload.
+    runOcr({ imagePath: paths.imagePath(canvas.id, hash, 'png') })
+      .then(async (ocr) => {
+        // Node deleted mid-OCR — bail before any write/broadcast so we don't
+        // re-create the node JSON or resurrect it on the client.
+        if (isHashCancelled(canvas.id, hash)) return;
+        const spans = ocr.ok ? ocr.spans : [];
+        if (!ocr.ok && ocr.reason && ocr.reason !== 'ocr disabled') {
+          log.warn(`[ocr] ${canvas.id}/${hash}: ${ocr.reason}`);
+        }
+        broadcast(canvas, {
+          type: SseEvents.OCR_DONE, canvasId: canvas.id, jobId, hash,
+          spanCount: spans.length,
+        });
+        if (!spans.length) return;
+        // Re-read (the node may have been mutated by a concurrent hotspot
+        // append on the parent — but this is a freshly-built node, so a
+        // straight overwrite of text_layer is safe) and persist. Re-check
+        // cancellation right before writing in case deletion raced in.
+        if (isHashCancelled(canvas.id, hash)) return;
+        const updated = { ...node, text_layer: spans };
+        try {
+          await registerNode(canvas.id, updated);
+          await recordTextSpans(canvas.id, hash, spans);
+        } catch (e) { log.warn(`[ocr] persist ${canvas.id}/${hash}: ${e?.message}`); }
+        if (isHashCancelled(canvas.id, hash)) return;
+        broadcast(canvas, { type: SseEvents.NODE_READY, canvasId: canvas.id, jobId, hash, node: updated });
+      })
+      .catch((e) => log.warn(`[ocr] ${canvas.id}/${hash}: ${e?.message}`));
+  }
+
   return { node, cacheHit: false };
 }
 

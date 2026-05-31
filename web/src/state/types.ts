@@ -78,6 +78,7 @@ export type SseEvent =
   | { type: 'planner_done'; canvasId: string; jobId: string; hash: string; node: Omit<Node, 'image' | 'generated_at'> }
   | { type: 'image_started'; canvasId: string; jobId: string; hash: string }
   | { type: 'image_ready'; canvasId: string; jobId: string; hash: string; imageUrl: string; fallback: boolean }
+  | { type: 'variants_ready'; canvasId: string; jobId: string; hash: string; variants: string[] }
   | { type: 'ocr_done'; canvasId: string; jobId: string; hash: string; spanCount: number }
   | { type: 'node_ready'; canvasId: string; jobId: string; hash: string; node: Node }
   | { type: 'tree_updated'; canvasId: string; jobId: string; treeNodeCount: number }

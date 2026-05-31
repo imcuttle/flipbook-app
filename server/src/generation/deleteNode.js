@@ -20,6 +20,7 @@ import { deleteNodesFromDb } from '../db/repo.js';
 import { broadcast } from '../sse/hub.js';
 import { SseEvents } from '../sse/events.js';
 import { touchLastRun } from '../store/canvasStore.js';
+import { cancelHashWork } from './cancelRegistry.js';
 import { log } from '../lib/log.js';
 
 // Walk tree.nodes from `start` downward, returning every reachable hash
@@ -57,11 +58,17 @@ export async function deleteNodeCascade(canvas, hash) {
   const parentHash = tree.nodes[hash].parent ?? null;
   const deletedHashes = collectDescendants(tree.nodes, hash);
 
-  // 1) Disk: node JSONs and image files
+  // 1) Disk: node JSONs and image files (+ progressive variants). Also flag
+  //    each hash as cancelled so any in-flight variant/OCR work for it bails
+  //    before re-writing the node or broadcasting node_ready.
   for (const h of deletedHashes) {
+    cancelHashWork(canvas.id, h);
     await unlinkIfExists(paths.nodePath(canvas.id, h));
     await unlinkIfExists(paths.imagePath(canvas.id, h, 'png'));
     await unlinkIfExists(paths.imagePath(canvas.id, h, 'svg'));
+    await unlinkIfExists(paths.imagePath(canvas.id, h, 'blur.jpg'));
+    await unlinkIfExists(paths.imagePath(canvas.id, h, 'thumb.jpg'));
+    await unlinkIfExists(paths.imagePath(canvas.id, h, 'medium.jpg'));
   }
 
   // 2) tree.json — drop entries + remove from any children[] lists

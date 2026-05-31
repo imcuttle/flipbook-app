@@ -21,8 +21,9 @@ assetsRouter.get('/:id/nodes/:hash', async (req, res) => {
 assetsRouter.get('/:id/images/:file', (req, res) => {
   const { id, file } = req.params;
   if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
-  // file = <hash>.<ext>
-  const m = /^([a-f0-9]{12})\.(png|svg)$/.exec(file);
+  // file = <hash>.<ext> where ext is the original png/svg OR a derived
+  // progressive-loading variant: <hash>.blur.jpg / .thumb.jpg / .medium.jpg.
+  const m = /^([a-f0-9]{12})\.(png|svg|blur\.jpg|thumb\.jpg|medium\.jpg)$/.exec(file);
   if (!m) return res.status(400).json({ error: 'bad_file' });
   const [, hash, ext] = m;
   const filePath = paths.imagePath(id, hash, ext);
@@ -34,7 +35,8 @@ assetsRouter.get('/:id/images/:file', (req, res) => {
   }
   if (!fs.existsSync(resolved)) return res.status(404).json({ error: 'not_found' });
   if (ext === 'svg') res.type('image/svg+xml');
-  else res.type('image/png');
+  else if (ext === 'png') res.type('image/png');
+  else res.type('image/jpeg'); // blur/thumb/medium variants
   fs.createReadStream(resolved).pipe(res);
 });
 

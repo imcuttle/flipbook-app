@@ -6,6 +6,11 @@ export const SseEvents = Object.freeze({
   PLANNER_DONE: 'planner_done',
   IMAGE_STARTED: 'image_started',
   IMAGE_READY: 'image_ready',
+  // Progressive-loading variants (blur/thumb/medium JPEGs) for a node's
+  // image have been generated on disk. Carries the hash + the list of
+  // variant names actually written, so the client can switch from the
+  // blur placeholder up to medium / full-res.
+  VARIANTS_READY: 'variants_ready',
   OCR_DONE: 'ocr_done',
   NODE_READY: 'node_ready',
   // A user-friendly progress line for the pending click bubble. Sent
