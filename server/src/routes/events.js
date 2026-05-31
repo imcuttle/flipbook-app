@@ -1,6 +1,7 @@
 import express from 'express';
 import { getCanvas } from '../store/canvasStore.js';
-import { attach } from '../sse/hub.js';
+import { attach, broadcast } from '../sse/hub.js';
+import { SseEvents } from '../sse/events.js';
 import { isSafeId } from '../store/paths.js';
 import { resumeIncomplete } from '../generation/resume.js';
 
@@ -12,6 +13,23 @@ eventsRouter.get('/:id/events', async (req, res) => {
   const runtime = await getCanvas(id);
   if (!runtime) return res.status(404).json({ error: 'not_found' });
   attach(runtime, res);
+  // If a ROOT generation is currently in flight (no persisted node yet),
+  // re-send planning_started so a freshly-(re)connected client restores
+  // its in-progress UI instead of showing a blank "生成中…". planning_started
+  // is idempotent in the reducer, so re-emitting to already-connected
+  // clients is harmless.
+  if (runtime.rootInFlight) {
+    try {
+      broadcast(runtime, {
+        type: SseEvents.PLANNING_STARTED,
+        canvasId: runtime.id,
+        jobId: runtime.rootInFlight.jobId,
+        parentHash: null,
+        hotspotIndex: null,
+        label: runtime.rootInFlight.topic ?? runtime.topic,
+      });
+    } catch { /* logged in hub */ }
+  }
   // After the client is attached, look for any half-finished generation
   // jobs (parent hotspots whose target node is missing/imageless, or a
   // tree.root that never got its image written) and re-enqueue them so

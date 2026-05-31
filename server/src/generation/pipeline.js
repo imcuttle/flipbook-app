@@ -557,11 +557,18 @@ async function buildAndRegisterNode({
 // --------- Public: root node ---------
 export async function generateRootNode(canvas, args = {}) {
   const jobId = args.jobId || nanoid(8);
+  // Mark this canvas as having an in-flight ROOT generation so a client
+  // that connects (or reconnects after a refresh) can be re-sent the
+  // planning_started event and restore its in-progress UI. The root has
+  // no persisted node yet, so without this a mid-generation refresh shows
+  // a blank "生成中…" with no progress bubble until completion.
+  canvas.rootInFlight = { jobId, topic: canvas.topic };
   broadcast(canvas, {
     type: SseEvents.PLANNING_STARTED, canvasId: canvas.id, jobId,
     parentHash: null, hotspotIndex: null, label: canvas.topic,
   });
-  const { node, cacheHit } = await buildAndRegisterNode({
+  try {
+    const { node, cacheHit } = await buildAndRegisterNode({
     canvas, parentNode: null, jobId,
     currentLabel: '', hashSeed: canvas.topic,
     webSearchEnabled: args.webSearchEnabled,
@@ -583,6 +590,11 @@ export async function generateRootNode(canvas, args = {}) {
     type: SseEvents.DONE, canvasId: canvas.id, jobId, hash: node.hash, cacheHit,
   });
   return node;
+  } finally {
+    // Clear the in-flight marker on both success and failure so a later
+    // reconnect doesn't replay a planning_started for a job that's done.
+    if (canvas.rootInFlight?.jobId === jobId) canvas.rootInFlight = null;
+  }
 }
 
 // --------- Public: click → label → child node + parent hotspot append ---------
