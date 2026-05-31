@@ -17,8 +17,29 @@ import fs from 'node:fs/promises';
 import { paths } from '../store/paths.js';
 import { readNode, nodeExists } from '../store/nodeStore.js';
 import { readTree } from '../store/treeStore.js';
-import { enqueueRootGeneration, enqueueClickExpansion, isClickInFlight } from '../generation/pipeline.js';
+import { enqueueRootGeneration, enqueueClickExpansion, isClickInFlight, getClickInFlight } from '../generation/pipeline.js';
+import { broadcast } from '../sse/hub.js';
+import { SseEvents } from '../sse/events.js';
 import { log } from '../lib/log.js';
+
+// Re-emit planning_started for an in-flight click so a reconnecting client
+// rebuilds its pending bubble (black pill) without us starting a duplicate
+// generation. Idempotent on the client.
+function replayPlanningStarted(canvas, parentHash, label) {
+  const inf = getClickInFlight(canvas.id, parentHash, label);
+  if (!inf) return;
+  try {
+    broadcast(canvas, {
+      type: SseEvents.PLANNING_STARTED,
+      canvasId: canvas.id,
+      jobId: inf.jobId,
+      parentHash,
+      hotspotIndex: null,
+      label,
+      clickXY: inf.clickXY,
+    });
+  } catch { /* logged in hub */ }
+}
 
 // Per-canvas guard so multiple concurrent SSE attaches don't re-enqueue
 // the same set of resume jobs.
@@ -93,7 +114,13 @@ export async function resumeIncomplete(canvas) {
         if (childHash) {
           // (a) linked but child incomplete.
           if (await nodeIsComplete(canvas.id, childHash)) continue;
-          if (isClickInFlight(canvas.id, parentHash, h.label)) continue;
+          if (isClickInFlight(canvas.id, parentHash, h.label)) {
+            // Original job still running (browser refreshed, server didn't
+            // restart) — don't duplicate; just replay planning_started so
+            // the reconnecting client restores the pending bubble.
+            replayPlanningStarted(canvas, parentHash, h.label);
+            continue;
+          }
           log.info(`[resume] ${canvas.id}: child ${childHash} of ${parentHash} incomplete — re-driving in place`);
           enqueueClickExpansion(canvas, {
             parentNode: parent,
@@ -112,7 +139,8 @@ export async function resumeIncomplete(canvas) {
           // generation is still running (e.g. browser refreshed without a
           // server restart) — otherwise we'd duplicate the child node.
           if (isClickInFlight(canvas.id, parentHash, h.label)) {
-            log.info(`[resume] ${canvas.id}: pending hotspot[${idx}] "${h.label}" still in-flight — skip`);
+            log.info(`[resume] ${canvas.id}: pending hotspot[${idx}] "${h.label}" still in-flight — replay planning_started`);
+            replayPlanningStarted(canvas, parentHash, h.label);
             continue;
           }
           log.info(`[resume] ${canvas.id}: pending hotspot[${idx}] "${h.label}" of ${parentHash} — re-driving in place`);

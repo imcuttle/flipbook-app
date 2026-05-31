@@ -39,14 +39,19 @@ const clickSem = new PerKeySemaphore(MAX_PARALLEL_CLICKS_PER_NODE);
 // ${labelLower}`. Used by resumeIncomplete() to avoid re-driving (and thus
 // DUPLICATING) a pending hotspot whose original generation job is still
 // running — e.g. after a browser refresh that reconnects SSE without the
-// server having restarted. Marked at enqueue time, cleared when the job
-// settles.
-const clicksInFlight = new Set();
+// server having restarted. Value carries the jobId + clickXY so resume can
+// re-emit planning_started for a reconnecting client (restores the pending
+// bubble) WITHOUT starting a duplicate generation. Marked at enqueue time,
+// cleared when the job settles.
+const clicksInFlight = new Map();
 export function clickInFlightKey(canvasId, parentHash, label) {
   return `${canvasId}::${parentHash}::${String(label ?? '').trim().toLowerCase()}`;
 }
 export function isClickInFlight(canvasId, parentHash, label) {
   return clicksInFlight.has(clickInFlightKey(canvasId, parentHash, label));
+}
+export function getClickInFlight(canvasId, parentHash, label) {
+  return clicksInFlight.get(clickInFlightKey(canvasId, parentHash, label)) ?? null;
 }
 
 // Per-job generation log helper. Every line gets a `[gen <jobId>]` prefix
@@ -911,7 +916,14 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
   const inflightKey = userLabel
     ? clickInFlightKey(canvas.id, parentNode.hash, userLabel)
     : null;
-  if (inflightKey) clicksInFlight.add(inflightKey);
+  if (inflightKey) {
+    clicksInFlight.set(inflightKey, {
+      jobId,
+      clickXY: [Number(clickXY[0]) || 0, Number(clickXY[1]) || 0],
+      parentHash: parentNode.hash,
+      label: userLabel,
+    });
+  }
   // Fire-and-forget; progress is reported via SSE.
   clickSem.run(key, () => expandFromClick(canvas, {
     parentNode, clickXY, jobId,
