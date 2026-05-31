@@ -91,6 +91,6 @@ export async function callPlanner({ topic, path = [], currentLabel = '', depth =
     'Return JSON ONLY matching the schema above. No prose. No backticks.',
   );
   const prompt = parts.join('\n');
-  const { parsed } = await callOnce({ prompt });
+  const { parsed } = await callOnce({ prompt, tag: 'planner' });
   return validatePlannerOutput(parsed);
 }

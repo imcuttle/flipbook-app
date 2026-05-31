@@ -46,7 +46,7 @@ export async function callDecideSearch({ topic, path = [], currentLabel = '', in
     'Return JSON ONLY matching the schema above. No prose. No backticks.',
   ].join('\n');
   try {
-    const { parsed } = await callOnce({ prompt });
+    const { parsed } = await callOnce({ prompt, tag: 'decide-search' });
     return validateDecideOutput(parsed);
   } catch {
     return { should_search: false, queries: [] };

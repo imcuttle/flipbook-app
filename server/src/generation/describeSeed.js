@@ -74,7 +74,7 @@ export async function describeSeedImage({ seedImagePath, userTopic, lang = 'zh' 
 
   let parsed;
   try {
-    const r = await callOnce({ prompt: buildPrompt({ sceneOnly: false }) });
+    const r = await callOnce({ prompt: buildPrompt({ sceneOnly: false }), tag: 'describe-seed' });
     parsed = r.parsed;
   } catch (e) {
     // First attempt refused (often "identifiable person / privacy"). Retry
@@ -83,7 +83,7 @@ export async function describeSeedImage({ seedImagePath, userTopic, lang = 'zh' 
     // of a topic-only guess.
     log.warn(`[describe-seed] failed: ${e?.message} — retrying scene-only`);
     try {
-      const r2 = await callOnce({ prompt: buildPrompt({ sceneOnly: true }) });
+      const r2 = await callOnce({ prompt: buildPrompt({ sceneOnly: true }), tag: 'describe-seed-scene' });
       parsed = r2.parsed;
     } catch (e2) {
       log.warn(`[describe-seed] scene-only retry also failed: ${e2?.message}`);

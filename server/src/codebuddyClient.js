@@ -20,6 +20,15 @@ import { log } from './lib/log.js';
 
 const sem = new Semaphore(config.maxParallelCodebuddy);
 
+// Test seam: allow tests to substitute the subprocess runner so callOnce's
+// retry/parse logic can be exercised deterministically without spawning the
+// real codebuddy binary. Production code never sets this.
+let _runCodebuddyImpl = null;
+export function __setRunCodebuddyForTest(fn) { _runCodebuddyImpl = fn; }
+function invokeRunCodebuddy(opts) {
+  return (_runCodebuddyImpl ?? runCodebuddy)(opts);
+}
+
 function runCodebuddy({ args, stdin, timeoutMs, onStdoutLine }) {
   return new Promise((resolve, reject) => {
     const child = spawn(config.codebuddyBin, args, {
@@ -60,8 +69,8 @@ function runCodebuddy({ args, stdin, timeoutMs, onStdoutLine }) {
     }
     child.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
     child.on('error', (err) => finish(err));
-    child.on('close', (code) => {
-      if (code === 0) finish(null, { stdout, stderr });
+    child.on('close', (code, signal) => {
+      if (code === 0) finish(null, { stdout, stderr, exitInfo: { code, signal } });
       else finish(new Error(`codebuddy exited ${code}: ${stderr.slice(0, 500)}`));
     });
 
@@ -225,36 +234,56 @@ function findMatchingClose(s, start) {
   return -1;
 }
 
-export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs }) {
+export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs, tag = 'llm', maxAttempts = 3 }) {
   return sem.run(async () => {
     let lastErr;
     let lastStdout = '';
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    let lastStderr = '';
+    let lastExitInfo = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
+        // Attempt 1 uses the prompt as-is. Retries append an escalating
+        // "JSON only" nudge — the failures we see are transient sampling
+        // collapse (degenerate gibberish) / truncation, which a fresh
+        // sample usually clears, so re-rolling is the main lever.
         const finalPrompt = attempt === 1
           ? prompt
-          : `${prompt}\n\n# IMPORTANT\nReturn JSON ONLY. No prose. No backticks. No commentary. Start your response with { and end with }.`;
-        const { stdout } = await runCodebuddy({
+          : `${prompt}\n\n# IMPORTANT\nReturn JSON ONLY. No prose. No backticks. No commentary. Start your response with { and end with }. Keep the response concise.`;
+        const { stdout, stderr, exitInfo } = await invokeRunCodebuddy({
           args: ['--print', '--output-format', 'json', '-y'],
           stdin: finalPrompt,
           timeoutMs,
         });
         lastStdout = stdout ?? '';
+        lastStderr = stderr ?? '';
+        lastExitInfo = exitInfo ?? null;
         if (!stdout?.trim()) throw new PlannerError('empty stdout from codebuddy');
         const parsed = tryParseJson(stdout);
         return { raw: stdout, parsed };
       } catch (e) {
         lastErr = e;
-        log.warn(`callOnce attempt ${attempt} failed:`, e?.message);
-        // A content-policy refusal won't change on retry — same prompt,
-        // same model, same answer. Bail out immediately so we don't waste
-        // 30+s on a doomed second attempt.
-        if (e instanceof PlannerRefusalError) break;
+        // Refusals are expected/benign — log tersely and bail (no retry).
+        if (e instanceof PlannerRefusalError) {
+          log.warn(`[${tag}] callOnce attempt ${attempt}: model refused (${e.message.slice(0, 100)})`);
+          break;
+        }
+        // For parse / empty / timeout failures, emit a structured diagnostic
+        // so we can see WHY codebuddy's output was unusable and whether the
+        // failure mode is degenerate-gibberish, truncation, or a crash.
+        const diag = diagnoseStdout(lastStdout, lastStderr, lastErr);
+        log.warn(
+          `[${tag}] callOnce attempt ${attempt}/${maxAttempts} failed: ${e?.message}`
+          + ` | promptLen=${(prompt ?? '').length}`
+          + ` | stdoutLen=${diag.stdoutLen} stderrLen=${(lastStderr || '').length}`
+          + ` | topParse=${diag.topParse} resultLen=${diag.resultLen}`
+          + ` | gibberish=${diag.gibberish} maxRun=${diag.maxRun} alnumRatio=${diag.alnumRatio}`
+          + ` | truncated=${diag.truncated}`
+          + (lastExitInfo ? ` | exit=${lastExitInfo.code}/${lastExitInfo.signal ?? '-'}` : '')
+          + (diag.usage ? ` | tokens=${diag.usage}` : '')
+          + (lastStderr ? ` | stderrHead="${lastStderr.slice(0, 160).replace(/\s+/g, ' ')}"` : ''),
+        );
       }
     }
-    // Refusal: surface the prose directly without dumping a debug file
-    // (the failure isn't actionable from a developer's perspective —
-    // the model just said no).
     if (lastErr instanceof PlannerRefusalError) {
       throw lastErr;
     }
@@ -264,10 +293,14 @@ export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs }) 
       await fs.writeFile(
         dumpPath,
         [
-          `# planner failure: ${lastErr?.message ?? 'unknown'}`,
+          `# planner failure (tag=${tag}): ${lastErr?.message ?? 'unknown'}`,
+          `# exit: ${lastExitInfo ? `code=${lastExitInfo.code} signal=${lastExitInfo.signal ?? '-'}` : 'n/a'}`,
           '',
           '## prompt (truncated to 4k):',
           (prompt ?? '').slice(0, 4000),
+          '',
+          '## stderr (truncated to 4k):',
+          (lastStderr || '').slice(0, 4000),
           '',
           // Bumped to 64k so we capture the full codebuddy stdout for any
           // realistic failure (typical successful outputs are ~30k).
@@ -275,10 +308,67 @@ export async function callOnce({ prompt, timeoutMs = config.plannerTimeoutMs }) 
           lastStdout.slice(0, 64_000),
         ].join('\n'),
       );
-      log.warn(`callOnce dumped failure to ${dumpPath}`);
+      log.warn(`[${tag}] callOnce dumped failure to ${dumpPath}`);
     } catch {}
     throw new PlannerError(`planner failed after retries: ${lastErr?.message}`);
   });
+}
+
+// Build a compact structured diagnostic for a failed codebuddy call. Helps
+// distinguish the failure modes we actually see in the wild:
+//   - degenerate gibberish: model emitted a long whitespace-free run of
+//     high-entropy alnum chars (sampling collapse). gibberish=true.
+//   - truncation: stdout doesn't end in a closed JSON array/object — the
+//     stream was cut (timeout / token cap) mid-message. truncated=true.
+//   - crash: non-zero exit / stderr present.
+export function diagnoseStdout(stdout, stderr, err) {
+  const s = stdout || '';
+  const stdoutLen = s.length;
+  let topParse = 'ok';
+  let resultText = null;
+  try {
+    const top = JSON.parse(s);
+    if (Array.isArray(top)) {
+      const r = [...top].reverse().find((m) => m && m.type === 'result');
+      resultText = typeof r?.result === 'string' ? r.result : null;
+    } else if (top && typeof top === 'object') {
+      resultText = typeof top.result === 'string' ? top.result : null;
+    }
+  } catch {
+    topParse = 'fail';
+  }
+  // Longest run of non-whitespace chars, and alnum ratio within it — the
+  // signature of degenerate output (normal JSON/prose is broken up by
+  // whitespace/newlines every few dozen chars). A multi-thousand-char run
+  // with a high alnum ratio is sampling collapse, even if a stray JSON
+  // punctuation char from the surrounding envelope sneaks into the run.
+  const runs = s.split(/\s+/);
+  let maxRun = 0;
+  let longest = '';
+  for (const r of runs) { if (r.length > maxRun) { maxRun = r.length; longest = r; } }
+  const alnum = (longest.match(/[A-Za-z0-9+/]/g) || []).length;
+  const alnumRatio = longest.length ? +(alnum / longest.length).toFixed(2) : 0;
+  // >1000-char whitespace-free run that's almost all alnum = degenerate.
+  const gibberish = maxRun > 1000 && alnumRatio > 0.9;
+  // Truncation: last non-space char isn't a closing brace/bracket.
+  const tail = s.trimEnd().slice(-1);
+  const truncated = topParse === 'fail' && tail !== ']' && tail !== '}';
+  // Token usage if present in the result envelope.
+  let usage = null;
+  const um = s.match(/"output_tokens"\s*:\s*(\d+)/);
+  const im = s.match(/"input_tokens"\s*:\s*(\d+)/);
+  if (um || im) usage = `in=${im ? im[1] : '?'} out=${um ? um[1] : '?'}`;
+  return {
+    stdoutLen,
+    topParse,
+    resultLen: resultText ? resultText.length : 0,
+    gibberish,
+    maxRun,
+    alnumRatio,
+    truncated,
+    usage,
+    errType: err?.constructor?.name,
+  };
 }
 
 async function assertWroteFile(filePath, minBytes = 512) {

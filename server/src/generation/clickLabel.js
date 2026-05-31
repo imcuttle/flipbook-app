@@ -145,6 +145,6 @@ export async function callClickLabel({ parentNode, clickXY, existingLabels, canv
     'Return JSON ONLY matching the schema above. No prose. No backticks.',
   );
   const prompt = promptParts.join('\n');
-  const { parsed } = await callOnce({ prompt });
+  const { parsed } = await callOnce({ prompt, tag: 'click-label' });
   return validateClickLabel(parsed, { click_xy: inputs.click_xy });
 }

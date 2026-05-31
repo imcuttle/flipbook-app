@@ -66,7 +66,7 @@ export async function repairImagePrompt({ originalPrompt, refusalProse, seedDesc
   ].filter(Boolean).join('\n');
 
   try {
-    const { parsed } = await callOnce({ prompt });
+    const { parsed } = await callOnce({ prompt, tag: 'repair-prompt' });
     if (!parsed || typeof parsed !== 'object') return null;
     const out = String(parsed.rewritten_prompt ?? '').trim();
     if (!out) return null;
