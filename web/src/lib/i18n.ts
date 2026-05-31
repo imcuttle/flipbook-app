@@ -120,7 +120,7 @@ export const messages: Catalogue = {
   'canvas.loading': { zh: '正在生成…', en: 'Generating canvas…' },
   'canvas.loading.short': { zh: '加载中…', en: 'Loading…' },
   'canvas.cap.full': { zh: '4 个并行已满,等其中一个完成', en: 'Wait for one to finish' },
-  'canvas.hint.press': { zh: '长按图片任意位置 2 秒即可深入', en: 'Press and hold any spot on the image (2 s) to expand' },
+  'canvas.hint.press': { zh: '长按图片任意位置 1 秒即可深入', en: 'Press and hold any spot on the image (1 s) to expand' },
   'canvas.preview.hint': { zh: '只读预览,无法触发新生成。生成中的进度仍会同步。', en: 'Read-only preview — clicks disabled. Live progress still streams in.' },
   'canvas.preview.badge': { zh: '只读预览', en: 'Preview' },
   'canvas.busy.badge': { zh: '并行中', en: 'in-flight' },

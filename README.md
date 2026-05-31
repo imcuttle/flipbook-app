@@ -69,7 +69,7 @@ Most "AI画图" demos stop at one image. This one turns each image into a
 
 ## 🚀 Highlights
 
-- 🖱️ **Click-to-explore**: long-press (2 s) anywhere on a node's image. The
+- 🖱️ **Click-to-explore**: long-press (1 s) anywhere on a node's image. The
   backend infers the label, decides whether to web-search, then generates a
   child node. Spatial + semantic dedup means clicking the same region again
   jumps straight in.

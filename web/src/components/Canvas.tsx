@@ -13,7 +13,7 @@ import { layOutHotspots } from '../lib/layout';
 import { useLang, t } from '../lib/i18n';
 
 const MAX_PARALLEL_PER_NODE = 4;
-const LONG_PRESS_MS = 2000;
+const LONG_PRESS_MS = 1000;
 const MOVE_CANCEL_PX = 10;
 
 type Props = {
@@ -55,7 +55,7 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
   const atCapacity = pendingClicks.length >= MAX_PARALLEL_PER_NODE;
   const interactive = !readOnly && hasImage && !imageLoading && !atCapacity;
 
-  // Long-press tracking. Click became "press and hold for 2 s" — gives users
+  // Long-press tracking. Click became "press and hold for 1 s" — gives users
   // an explicit Are-you-sure moment and prevents accidental drilldown clicks.
   const [pressXY, setPressXY] = useState<[number, number] | null>(null);
   const pressTimerRef = useRef<number | null>(null);
