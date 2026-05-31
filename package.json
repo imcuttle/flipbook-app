@@ -14,6 +14,8 @@
     "build": "npm run build -w web",
     "start": "node server/src/index.js",
     "sync-prompts": "node scripts/sync-prompts.mjs",
+    "lan:up": "bash scripts/lan-domain-setup.sh",
+    "lan:down": "bash scripts/lan-domain-teardown.sh",
     "test": "npm run test --workspaces --if-present",
     "clean:data": "rimraf server/data",
     "clean:dist": "rimraf web/dist",

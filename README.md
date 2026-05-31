@@ -265,6 +265,30 @@ npm run build         # builds web/dist
 npm start             # serves web/dist + API from :8787
 ```
 
+## 🌐 LAN access via a fixed domain (macOS)
+
+Give the app a stable hostname (e.g. `http://flipbook.lan`) reachable from any
+device on your LAN — no port number needed. Uses **dnsmasq** (resolves the
+domain → this machine's LAN IP) + **Caddy** (reverse-proxies `:80` to the app).
+
+```bash
+npm run lan:up        # flipbook.lan → dev :5173 (preferred), falls back to prod :8787
+npm run lan:down      # tear it down
+
+# custom: scripts/lan-domain-setup.sh <domain> <devPort> <prodPort>
+bash scripts/lan-domain-setup.sh studio.lan 5173 8787
+```
+
+The proxy tries the **dev** port (5173) first and automatically **falls back to
+the prod** port (8787) when dev isn't running (passive health check, 3s
+blacklist). So `npm run dev` and `npm start` both work behind the same domain.
+
+`lan:up` installs dnsmasq/caddy via Homebrew if missing and needs `sudo`
+(dnsmasq binds 53, Caddy binds 80). It only configures **this** machine; to
+reach the domain from other devices, point their DNS at this machine's LAN IP
+(router DHCP DNS, per-device DNS, or a `hosts` entry — the script prints the
+exact options and your IP).
+
 ## ⚙️ Configuration (env)
 
 | Var | Default | Purpose |

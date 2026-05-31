@@ -245,6 +245,29 @@ npm run build         # 构建 web/dist
 npm start             # 用 :8787 同时托管 web/dist 和 API
 ```
 
+## 🌐 局域网固定域名访问（macOS）
+
+给应用一个稳定域名（如 `http://flipbook.lan`），局域网内任意设备都能访问，
+无需带端口。底层用 **dnsmasq**（把域名解析到本机局域网 IP）+ **Caddy**
+（把 `:80` 反向代理到应用）。
+
+```bash
+npm run lan:up        # flipbook.lan → 优先 dev :5173，dev 没起时回退 prod :8787
+npm run lan:down      # 撤销
+
+# 自定义: scripts/lan-domain-setup.sh <域名> <dev端口> <prod端口>
+bash scripts/lan-domain-setup.sh studio.lan 5173 8787
+```
+
+反代会**优先打到 dev 端口（5173）**，当 dev 没启动时**自动回退到 prod 端口
+（8787）**（被动健康检查，拉黑 3s）。所以 `npm run dev` 和 `npm start` 都能
+在同一个域名后面正常工作。
+
+`lan:up` 会在缺失时用 Homebrew 自动安装 dnsmasq/caddy，并需要 `sudo`
+（dnsmasq 占用 53、Caddy 占用 80）。它只配置**本机**；要让其它设备也能访问该
+域名，需把它们的 DNS 指向本机局域网 IP（路由器 DHCP DNS、设备手动 DNS、或
+改 hosts —— 脚本会打印具体方式和你的 IP）。
+
 ## ⚙️ 环境变量配置
 
 | 变量 | 默认值 | 用途 |
