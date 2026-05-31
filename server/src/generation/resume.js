@@ -17,7 +17,7 @@ import fs from 'node:fs/promises';
 import { paths } from '../store/paths.js';
 import { readNode, nodeExists } from '../store/nodeStore.js';
 import { readTree } from '../store/treeStore.js';
-import { enqueueRootGeneration, enqueueClickExpansion, isClickInFlight, getClickInFlight } from '../generation/pipeline.js';
+import { enqueueRootGeneration, enqueueClickExpansion, isClickInFlight, getClickInFlight, listClickJobsInFlight } from '../generation/pipeline.js';
 import { broadcast } from '../sse/hub.js';
 import { SseEvents } from '../sse/events.js';
 import { log } from '../lib/log.js';
@@ -154,6 +154,27 @@ export async function resumeIncomplete(canvas) {
           resumed++;
         }
       }
+    }
+
+    // Label-inference phase recovery: a click that's still inferring its
+    // label has NO hotspot on the parent yet (the hotspot is appended only
+    // after the label is known), so the loop above can't see it. Replay
+    // planning_started for every such in-flight job so a refresh during
+    // that window still restores the black pending bubble. We skip jobs
+    // that already have a matching pending hotspot (handled above) by
+    // checking against the parent hotspots we just scanned.
+    for (const job of listClickJobsInFlight(canvas.id)) {
+      try {
+        broadcast(canvas, {
+          type: SseEvents.PLANNING_STARTED,
+          canvasId: canvas.id,
+          jobId: job.jobId,
+          parentHash: job.parentHash,
+          hotspotIndex: null,
+          label: null,
+          clickXY: job.clickXY,
+        });
+      } catch { /* logged in hub */ }
     }
   } catch (e) {
     log.warn(`[resume] ${canvas.id} failed: ${e?.message}`);

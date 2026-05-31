@@ -20,12 +20,25 @@ export function validateClickLabel(raw, { click_xy }) {
       reason: String(raw.reason ?? '').slice(0, 240) || 'no drillable subject under click',
     };
   }
-  const { label, anchor_xy, leader_xy, next_prompt } = raw;
-  if (typeof label !== 'string' || !label.trim()) throw new PlannerError('label missing');
+  // The label is occasionally returned under an alternate key (the model
+  // drifts between `label` / `title` / `name` / `subject`). Accept any of
+  // them before giving up.
+  const { anchor_xy, leader_xy, next_prompt } = raw;
+  const labelRaw = [raw.label, raw.title, raw.name, raw.subject]
+    .find((v) => typeof v === 'string' && v.trim());
+  // If there's genuinely no usable label, DON'T crash the whole job —
+  // treat it as a soft rejection so the pipeline clears the pending
+  // bubble and toasts the user instead of throwing an unhandled error.
+  if (!labelRaw) {
+    return {
+      rejected: true,
+      reason: String(raw.reason ?? '').slice(0, 240) || 'could not infer a label for this spot',
+    };
+  }
   const ax = Array.isArray(anchor_xy) ? [clamp01(anchor_xy[0]), clamp01(anchor_xy[1])] : [clamp01(click_xy[0] + 0.1), clamp01(click_xy[1] + 0.05)];
   const lx = Array.isArray(leader_xy) ? [clamp01(leader_xy[0]), clamp01(leader_xy[1])] : [clamp01(click_xy[0]), clamp01(click_xy[1])];
   return {
-    label: String(label).slice(0, 80),
+    label: String(labelRaw).slice(0, 80),
     anchor_xy: ax,
     leader_xy: lx,
     next_prompt: String(next_prompt ?? '').slice(0, 400),

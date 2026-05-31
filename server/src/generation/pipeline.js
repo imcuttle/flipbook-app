@@ -53,6 +53,46 @@ export function isClickInFlight(canvasId, parentHash, label) {
 export function getClickInFlight(canvasId, parentHash, label) {
   return clicksInFlight.get(clickInFlightKey(canvasId, parentHash, label)) ?? null;
 }
+export function markClickInFlight(canvasId, parentHash, label, info) {
+  clicksInFlight.set(clickInFlightKey(canvasId, parentHash, label), {
+    parentHash, label, ...info,
+  });
+}
+export function clearClickInFlight(canvasId, parentHash, label) {
+  clicksInFlight.delete(clickInFlightKey(canvasId, parentHash, label));
+}
+// Clear any label-keyed in-flight marker associated with a given jobId.
+// Fresh long-press clicks register their marker only after the label is
+// inferred (inside expandFromClick), so the enqueue-time key is unknown;
+// this lets the settle handler clean up by jobId regardless.
+function clearClickInFlightByJob(jobId) {
+  for (const [k, v] of clicksInFlight) {
+    if (v?.jobId === jobId) clicksInFlight.delete(k);
+  }
+}
+
+// In-flight clicks indexed by jobId, keyed `${canvasId}::${jobId}`. Unlike
+// clicksInFlight (label-keyed, only known once the label is inferred), this
+// tracks EVERY click from the instant it's enqueued — including the
+// label-inference phase BEFORE any hotspot is appended to the parent JSON.
+// resumeIncomplete() uses it so a browser refresh DURING label inference
+// still restores the pending bubble (the black pill), which otherwise has
+// zero persisted trace to recover from. Cleared when the job settles.
+const clickJobsInFlight = new Map();
+function jobKey(canvasId, jobId) { return `${canvasId}::${jobId}`; }
+export function markClickJobInFlight(canvasId, jobId, info) {
+  clickJobsInFlight.set(jobKey(canvasId, jobId), { canvasId, jobId, ...info });
+}
+export function clearClickJobInFlight(canvasId, jobId) {
+  clickJobsInFlight.delete(jobKey(canvasId, jobId));
+}
+export function listClickJobsInFlight(canvasId) {
+  const out = [];
+  for (const v of clickJobsInFlight.values()) {
+    if (v.canvasId === canvasId) out.push(v);
+  }
+  return out;
+}
 
 // Per-job generation log helper. Every line gets a `[gen <jobId>]` prefix
 // so multiple in-flight jobs (4 parallel clicks per parent + multiple
@@ -793,6 +833,17 @@ export async function expandFromClick(canvas, args = {}) {
   // 2) Append a pending hotspot to parent (so the UI can render the card immediately
   //    while the child is being generated). Per-parent lock prevents concurrent
   //    clicks from clobbering each other's hotspots[] mutations.
+  // Now that the label is known, register a label-keyed in-flight marker so
+  // a concurrent SSE-reconnect resume that DOES see the freshly-appended
+  // pending hotspot won't re-drive it into a duplicate child. (Fresh
+  // long-press clicks reach here without a pre-set marker; resume-driven
+  // clicks set it at enqueue time.)
+  if (!isClickInFlight(canvas.id, parentNode.hash, labelOut.label)) {
+    markClickInFlight(canvas.id, parentNode.hash, labelOut.label, {
+      jobId,
+      clickXY: [Number(clickXY?.[0]) || 0, Number(clickXY?.[1]) || 0],
+    });
+  }
   const newHotspot = {
     label: labelOut.label,
     anchor_xy: labelOut.anchor_xy,
@@ -917,13 +968,22 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
     ? clickInFlightKey(canvas.id, parentNode.hash, userLabel)
     : null;
   if (inflightKey) {
-    clicksInFlight.set(inflightKey, {
+    markClickInFlight(canvas.id, parentNode.hash, userLabel, {
       jobId,
       clickXY: [Number(clickXY[0]) || 0, Number(clickXY[1]) || 0],
-      parentHash: parentNode.hash,
-      label: userLabel,
     });
   }
+  // Track EVERY click by jobId from the moment it's enqueued — covers the
+  // label-inference phase (before any hotspot exists on disk) so a refresh
+  // during that window can still restore the pending bubble. `resume:true`
+  // marks re-driven clicks so resume doesn't replay a bubble for a job it
+  // itself just started.
+  const jKey = jobKey(canvas.id, jobId);
+  markClickJobInFlight(canvas.id, jobId, {
+    parentHash: parentNode.hash,
+    clickXY: [Number(clickXY[0]) || 0, Number(clickXY[1]) || 0],
+    isResume: Number.isInteger(resumeHotspotIndex),
+  });
   // Fire-and-forget; progress is reported via SSE.
   clickSem.run(key, () => expandFromClick(canvas, {
     parentNode, clickXY, jobId,
@@ -940,7 +1000,13 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
         log.error(`[gen ${jobId}] expandFromClick failed:`, e?.stack || e);
       }
     })
-    .finally(() => { if (inflightKey) clicksInFlight.delete(inflightKey); });
+    .finally(() => {
+      if (inflightKey) clicksInFlight.delete(inflightKey);
+      // Also clear any label-keyed marker registered later (inside
+      // expandFromClick once the label was inferred) for this job.
+      clearClickInFlightByJob(jobId);
+      clickJobsInFlight.delete(jKey);
+    });
   // Surface queue stats so the route can echo them back to the client.
   return {
     jobId,
