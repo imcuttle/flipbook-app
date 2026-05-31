@@ -67,17 +67,14 @@ function emitPhaseMessage(canvas, jobId, messageKey, messageEn, extra = {}) {
 function clickKey(canvasId, parentHash) { return `${canvasId}::${parentHash}`; }
 
 // Broadcast a localised, warn-level "your uploaded image was dropped for
-// compliance reasons" toast (generation continues without the seed). The
-// model's own (often English) refusal reason is appended, truncated.
-function emitComplianceToast(canvas, jobId, lang, refusalProse) {
-  const reason = String(refusalProse || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+// compliance reasons" toast (generation continues without the seed). We do
+// NOT forward the model's raw refusal prose because it comes back in the
+// model's own language (usually English) and the user asked for the reason
+// in their selected language. Instead we give a clear localised explanation.
+function emitComplianceToast(canvas, jobId, lang, _refusalProse) {
   const message = lang === 'en'
-    ? (reason
-        ? `Your uploaded image was declined (likely an identifiable person / content-policy issue): ${reason} — generating from the topic text instead.`
-        : 'Your uploaded image was declined (likely an identifiable person / content-policy issue) — generating from the topic text instead.')
-    : (reason
-        ? `上传图片被拒绝(可能含可识别真人或涉及内容合规):${reason} — 已改为根据主题文字生成。`
-        : '上传图片被拒绝(可能含可识别真人或涉及内容合规) — 已改为根据主题文字生成。');
+    ? 'Your uploaded image was declined on content-policy grounds (it likely contains an identifiable real person, or otherwise sensitive content). The page is being generated from the topic and the scene description instead — the specific person will not be reproduced.'
+    : '上传的图片因内容合规被拒绝(很可能包含可识别的真人,或其他敏感内容)。已改为根据主题与场景描述生成页面 — 不会重现该具体人物。';
   try {
     broadcast(canvas, {
       type: SseEvents.ERROR, canvasId: canvas.id, jobId,
@@ -331,6 +328,10 @@ async function buildAndRegisterNode({
         const fallbackTopic = (effectiveSubject && effectiveSubject !== '__pending__')
           ? effectiveSubject
           : (canvas.topic && canvas.topic !== '__pending__' ? canvas.topic : (currentLabel || ''));
+        // Drop the seed IMAGE (can't image-edit it) but KEEP the scene
+        // description (subject/description/features) so the text-driven
+        // page still recreates the uploaded scene — e.g. the Forbidden
+        // City backdrop — minus the refused element (the real person).
         plannerJson = await plannerCall({
           topic: fallbackTopic,
           path: parentNode?.path ?? [],
@@ -339,11 +340,12 @@ async function buildAndRegisterNode({
           maxDepth: 99,
           sources,
           seedImagePath: null,
-          seedDescription: null,
+          seedDescription,
           lang,
         });
         effectiveSeedPath = null;
-        effectiveSeedDescription = null;
+        // Keep effectiveSeedDescription so the image step can ground the
+        // text-to-image prompt in the scene we extracted.
         genLog(jobId, 'planner.seed_refused',
           `→ text-only OK "${plannerJson.title}" (${Date.now() - tPlanner}ms)`);
       } catch (e2) {

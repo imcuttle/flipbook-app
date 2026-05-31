@@ -159,17 +159,12 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, seedIm
         // that their uploaded image likely tripped a content policy and we
         // fell back to generating from the description instead.
         if (seedImagePath) {
-          // Carry the model's own reason so the user understands WHY the
-          // upload was declined (truncated to keep the toast readable).
-          // Localised to the generation's language.
-          const reason = String(result.refusalProse).replace(/\s+/g, ' ').trim().slice(0, 180);
+          // Localised compliance notice. We don't forward the model's raw
+          // refusal prose because it comes back in the model's own language
+          // (usually English); the user wants the reason in their language.
           const msg = userLang === 'en'
-            ? (reason
-                ? `Your uploaded image was declined by the image model (possible content-policy issue): ${reason} — generating from its description instead.`
-                : 'Your uploaded image was declined by the image model (possible content-policy issue) — generating from its description instead.')
-            : (reason
-                ? `上传图片被图像模型拒绝(可能涉及内容合规):${reason} — 已改用根据描述生成。`
-                : '上传图片被图像模型拒绝(可能涉及内容合规) — 已改用根据描述生成。');
+            ? 'Your uploaded image was declined by the image model on content-policy grounds — generating from its description instead.'
+            : '上传的图片因内容合规被图像模型拒绝 — 已改用根据其描述生成。';
           emitPhase('image.seed_refused', msg);
         }
         emitPhase('image.repair',
