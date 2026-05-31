@@ -173,16 +173,17 @@ export type AppState = {
 
 // localStorage-backed pref for the web-search toggle. Read once at module
 // load so initialState reflects the user's last choice across page reloads.
-// Defaults to ON when no value is stored or on SSR/Node.
+// Defaults to OFF when no value is stored or on SSR/Node — web search is
+// opt-in; the user enables it explicitly when they want grounded facts.
 const WEB_SEARCH_KEY = 'flipbook_web_search';
 function readWebSearchPref(): boolean {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   try {
     const v = window.localStorage.getItem(WEB_SEARCH_KEY);
     if (v === '0') return false;
     if (v === '1') return true;
   } catch { /* localStorage unavailable */ }
-  return true;
+  return false;
 }
 
 export function persistWebSearchPref(on: boolean) {

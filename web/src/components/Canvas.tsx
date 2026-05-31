@@ -42,6 +42,10 @@ type Props = {
   // Lets the App convert image-relative xy → stage-relative xy via the
   // imageRect this component computes. Called whenever imageRect changes.
   onImageRectChange?: (rect: { left: number; top: number; width: number; height: number } | null) => void;
+  // Canvas image orientation. Authoritative source from app state (set at
+  // creation, adopted from the tree on open) — more reliable than reading
+  // tree.orientation, which may not be loaded yet during root generation.
+  orientation?: 'landscape' | 'portrait';
 };
 
 const PHASE_KEY: Record<PendingClick['phase'], 'phase.planning' | 'phase.image' | 'phase.finalizing'> = {
@@ -50,10 +54,12 @@ const PHASE_KEY: Record<PendingClick['phase'], 'phase.planning' | 'phase.image' 
   finalizing: 'phase.finalizing',
 };
 
-export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, readOnly, showChrome, showLabels, fullscreen, enterMode = 'none', originXY, onImageClick, onHotspotClick, onHotspotDelete, onJumpToHash, overlay, onImageRectChange }: Props) {
+export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, readOnly, showChrome, showLabels, fullscreen, enterMode = 'none', originXY, onImageClick, onHotspotClick, onHotspotDelete, onJumpToHash, overlay, onImageRectChange, orientation }: Props) {
   const [lang] = useLang();
   const isMobile = useIsMobile();
-  const isPortrait = tree?.orientation === 'portrait';
+  // Prefer the explicit orientation prop (app state); fall back to the tree
+  // for any caller that doesn't pass it.
+  const isPortrait = (orientation ?? tree?.orientation) === 'portrait';
   // Leader-line SVG viewBox height. The SVG uses preserveAspectRatio="none",
   // so its viewBox height MUST match the stage's real aspect or circles draw
   // as ellipses. Width is always 100; height = 100 / aspect. Landscape 16:9 →
@@ -312,7 +318,7 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
   // Portrait canvases flip the stage aspect to 9:16 so the taller image
   // fills the box without pillarboxing. Orientation is a per-canvas
   // property carried on the tree.
-  if (tree?.orientation === 'portrait') stageClass += ` ${styles.stagePortrait}`;
+  if (isPortrait) stageClass += ` ${styles.stagePortrait}`;
   if (readOnly) stageClass += ` ${styles.stageReadOnly}`;
   else if (atCapacity) stageClass += ` ${styles.stageBusy}`;
   else if (hasImage && !imageLoading) stageClass += ` ${styles.stageClickable}`;

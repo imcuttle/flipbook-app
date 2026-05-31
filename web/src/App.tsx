@@ -689,6 +689,7 @@ export default function App() {
               onHotspotDelete={onHotspotDelete}
               onJumpToHash={onJumpBreadcrumb}
               onImageRectChange={setCanvasImageRect}
+              orientation={state.orientation}
               overlay={clickComposer && (() => {
                 // image-relative xy → stage-relative for placement.
                 const ir = canvasImageRect ?? { left: 0, top: 0, width: 100, height: 100 };
