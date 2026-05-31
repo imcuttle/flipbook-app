@@ -17,7 +17,7 @@ import fs from 'node:fs/promises';
 import { paths } from '../store/paths.js';
 import { readNode, nodeExists } from '../store/nodeStore.js';
 import { readTree } from '../store/treeStore.js';
-import { enqueueRootGeneration, enqueueClickExpansion } from '../generation/pipeline.js';
+import { enqueueRootGeneration, enqueueClickExpansion, isClickInFlight } from '../generation/pipeline.js';
 import { log } from '../lib/log.js';
 
 // Per-canvas guard so multiple concurrent SSE attaches don't re-enqueue
@@ -93,18 +93,28 @@ export async function resumeIncomplete(canvas) {
         if (childHash) {
           // (a) linked but child incomplete.
           if (await nodeIsComplete(canvas.id, childHash)) continue;
-          log.info(`[resume] ${canvas.id}: child ${childHash} of ${parentHash} incomplete — re-enqueueing click "${h.label}"`);
+          if (isClickInFlight(canvas.id, parentHash, h.label)) continue;
+          log.info(`[resume] ${canvas.id}: child ${childHash} of ${parentHash} incomplete — re-driving in place`);
           enqueueClickExpansion(canvas, {
             parentNode: parent,
             clickXY,
             webSearchEnabled: parent.web_search_used !== false,
             userLabel: h.label,
+            // Reuse the existing hotspot slot (don't append a new one) —
+            // otherwise the catalog accrues duplicate entries on each resume.
+            resumeHotspotIndex: idx,
           });
           resumed++;
         } else {
           // (b) pending hotspot — child never started/finished. Re-drive
           // in place so the spinner card eventually links to a real child
-          // and the pending bubble reappears.
+          // and the pending bubble reappears. BUT skip if the original
+          // generation is still running (e.g. browser refreshed without a
+          // server restart) — otherwise we'd duplicate the child node.
+          if (isClickInFlight(canvas.id, parentHash, h.label)) {
+            log.info(`[resume] ${canvas.id}: pending hotspot[${idx}] "${h.label}" still in-flight — skip`);
+            continue;
+          }
           log.info(`[resume] ${canvas.id}: pending hotspot[${idx}] "${h.label}" of ${parentHash} — re-driving in place`);
           enqueueClickExpansion(canvas, {
             parentNode: parent,

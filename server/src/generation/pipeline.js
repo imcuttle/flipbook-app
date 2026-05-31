@@ -35,6 +35,20 @@ import { log } from '../lib/log.js';
 const MAX_PARALLEL_CLICKS_PER_NODE = Number(process.env.MAX_PARALLEL_CLICKS_PER_NODE || 4);
 const clickSem = new PerKeySemaphore(MAX_PARALLEL_CLICKS_PER_NODE);
 
+// In-flight click/child generations keyed by `${canvasId}::${parentHash}::
+// ${labelLower}`. Used by resumeIncomplete() to avoid re-driving (and thus
+// DUPLICATING) a pending hotspot whose original generation job is still
+// running — e.g. after a browser refresh that reconnects SSE without the
+// server having restarted. Marked at enqueue time, cleared when the job
+// settles.
+const clicksInFlight = new Set();
+export function clickInFlightKey(canvasId, parentHash, label) {
+  return `${canvasId}::${parentHash}::${String(label ?? '').trim().toLowerCase()}`;
+}
+export function isClickInFlight(canvasId, parentHash, label) {
+  return clicksInFlight.has(clickInFlightKey(canvasId, parentHash, label));
+}
+
 // Per-job generation log helper. Every line gets a `[gen <jobId>]` prefix
 // so multiple in-flight jobs (4 parallel clicks per parent + multiple
 // canvases) stay readable when interleaved in the server log. Phase tags
@@ -889,6 +903,15 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
     + `${seedImagePath ? ' (seeded)' : ''}`
     + `${Number.isInteger(resumeHotspotIndex) ? ' resume=' + resumeHotspotIndex : ''}`,
   );
+  // Mark this (parent,label) as in-flight so a concurrent SSE-reconnect
+  // resume doesn't re-drive the same pending hotspot and create a
+  // duplicate child. Only meaningful when we know the label up-front
+  // (resume + user-label clicks); fresh unlabeled clicks get their label
+  // from the LLM and aren't the duplication risk.
+  const inflightKey = userLabel
+    ? clickInFlightKey(canvas.id, parentNode.hash, userLabel)
+    : null;
+  if (inflightKey) clicksInFlight.add(inflightKey);
   // Fire-and-forget; progress is reported via SSE.
   clickSem.run(key, () => expandFromClick(canvas, {
     parentNode, clickXY, jobId,
@@ -904,7 +927,8 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
       } else {
         log.error(`[gen ${jobId}] expandFromClick failed:`, e?.stack || e);
       }
-    });
+    })
+    .finally(() => { if (inflightKey) clicksInFlight.delete(inflightKey); });
   // Surface queue stats so the route can echo them back to the client.
   return {
     jobId,
