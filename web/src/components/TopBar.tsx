@@ -272,6 +272,17 @@ function MoreMenu({
 
   useEffect(() => {
     if (!open) return;
+    // Only the desktop dropdown uses outside-click-to-close. On mobile the
+    // menu renders in a BottomSheet portaled to <body> — its buttons live
+    // OUTSIDE wrapRef, so this handler would treat a tap on a menu item as
+    // an "outside" click and close the sheet on mousedown BEFORE the
+    // button's click fires (making items unresponsive). The BottomSheet
+    // has its own backdrop dismissal, so skip this entirely on mobile.
+    if (isMobile) {
+      const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+    }
     const onDown = (e: MouseEvent) => {
       // Cast via the global DOM Node — the local `Node` import shadows it
       // (we imported it from state/types for breadcrumb props).
@@ -284,7 +295,7 @@ function MoreMenu({
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   // Shared menu rows — rendered into the desktop dropdown or the mobile
   // bottom sheet depending on viewport.
