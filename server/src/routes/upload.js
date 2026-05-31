@@ -41,13 +41,60 @@ export function extForFile(file) {
   return ext && /^(png|jpe?g|webp|gif)$/.test(ext) ? ext.replace('jpeg', 'jpg') : 'png';
 }
 
+// Longest-edge cap for persisted seed images. A user can upload up to
+// MAX_BYTES (8 MB) of phone-camera JPEG at e.g. 4032×3024. That seed is
+// later referenced via codebuddy's `@<path>` syntax by describeSeed,
+// planner, AND callImageGen — and codebuddy base64-encodes the image into
+// the session then ECHOES it back in --output-format json stdout, which
+// balloons stdout to MBs of base64 and makes JSON parsing fail every time
+// (same root cause as the click-marker echo bug). 1536px is still plenty
+// for both vision understanding and image-edit composition fidelity while
+// keeping the file (and its base64 echo) small.
+const SEED_MAX_EDGE = 1536;
+
+// Best-effort downscale of an oversized image buffer. Returns the resized
+// buffer + the extension to persist (oversized images are normalised to
+// JPEG for size; small images keep their original ext/buffer). Falls back
+// to the original buffer if sharp is unavailable or the image can't be
+// processed — persistence must never fail just because resizing did.
+async function maybeDownscale(buffer, ext) {
+  let sharp;
+  try {
+    const mod = await import('sharp');
+    sharp = mod.default ?? mod;
+  } catch {
+    return { buffer, ext }; // sharp not installed — keep original
+  }
+  try {
+    const meta = await sharp(buffer).metadata();
+    if (!meta.width || !meta.height) return { buffer, ext };
+    const longest = Math.max(meta.width, meta.height);
+    if (longest <= SEED_MAX_EDGE) return { buffer, ext }; // already small enough
+    const scale = SEED_MAX_EDGE / longest;
+    const out = await sharp(buffer)
+      .resize(
+        Math.round(meta.width * scale),
+        Math.round(meta.height * scale),
+        { fit: 'inside' },
+      )
+      // Normalise to JPEG: oversized uploads are photos, and JPEG keeps the
+      // downscaled seed an order of magnitude smaller than re-encoded PNG.
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    return { buffer: out, ext: 'jpg' };
+  } catch {
+    return { buffer, ext };
+  }
+}
+
 // Persist an in-memory upload (from multer) into the canvas's uploads/
-// directory. Returns the absolute path.
+// directory. Returns the absolute path. Oversized images are downscaled
+// first (see maybeDownscale / SEED_MAX_EDGE).
 export async function persistUpload(canvasId, basename, file) {
   const dir = paths.uploadDir(canvasId);
   await fs.mkdir(dir, { recursive: true });
-  const ext = extForFile(file);
+  const { buffer, ext } = await maybeDownscale(file.buffer, extForFile(file));
   const dest = paths.uploadPath(canvasId, `${basename}.${ext}`);
-  await fs.writeFile(dest, file.buffer);
+  await fs.writeFile(dest, buffer);
   return dest;
 }

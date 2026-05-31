@@ -58,8 +58,10 @@ done
 
 # --- dnsmasq: 解析 域名 → 本机 LAN IP ----------------------------------------
 mkdir -p "${DNSMASQ_D}"
-# 确保主配置启用 conf-dir（幂等）
-if [[ ! -f "${DNSMASQ_CONF}" ]] || ! grep -q "conf-dir=${DNSMASQ_D}" "${DNSMASQ_CONF}" 2>/dev/null; then
+# 确保主配置启用 conf-dir（幂等）。注意：必须匹配「未注释」的 conf-dir 行
+# —— Homebrew 的默认 dnsmasq.conf 里带有注释掉的 `#conf-dir=...`,若用不带
+# 锚点的 grep 会误判为已启用,导致 drop-in 永不加载、解析不生效。
+if [[ ! -f "${DNSMASQ_CONF}" ]] || ! grep -Eq "^[[:space:]]*conf-dir=${DNSMASQ_D}" "${DNSMASQ_CONF}" 2>/dev/null; then
   info "启用 dnsmasq conf-dir"
   printf '\n# added by flipbook lan-domain-setup\nconf-dir=%s/,*.conf\n' "${DNSMASQ_D}" >> "${DNSMASQ_CONF}"
 fi

@@ -1073,6 +1073,26 @@ export function enqueueClickExpansion(canvas, { parentNode, clickXY, webSearchEn
       } else {
         log.error(`[gen ${jobId}] expandFromClick failed:`, e?.stack || e);
       }
+      // Tell the frontend the click failed so it drops the pending bubble
+      // and toasts instead of spinning on "inferring label…" forever. We
+      // reuse CLICK_REJECTED (the client already clears the bubble on it)
+      // plus DONE to terminate the job stream. Without this, planner
+      // exceptions left the pending bubble hanging indefinitely.
+      const reason = e instanceof PlannerRefusalError
+        ? e.message.slice(0, 240)
+        : '生成失败，请重试 / generation failed, please try again';
+      try {
+        broadcast(canvas, {
+          type: SseEvents.CLICK_REJECTED, canvasId: canvas.id, jobId,
+          parentHash: parentNode.hash, clickXY, reason,
+        });
+        broadcast(canvas, {
+          type: SseEvents.DONE, canvasId: canvas.id, jobId,
+          hash: parentNode.hash, cacheHit: false,
+        });
+      } catch (bErr) {
+        log.warn(`[gen ${jobId}] failed to broadcast click failure: ${bErr?.message}`);
+      }
     })
     .finally(() => {
       if (inflightKey) clicksInFlight.delete(inflightKey);

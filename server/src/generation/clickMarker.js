@@ -85,15 +85,31 @@ export async function renderClickMarker({ canvasId, parentHash, clickXY, jobId }
   try {
     const meta = await sharp(parentPng).metadata();
     if (!meta.width || !meta.height) return null;
-    const overlay = buildMarkerSvg(meta.width, meta.height, [
+    // Downscale so the marker image stays small when fed to the
+    // vision model. Generated parents are 1920×1080 or 2752×1536 PNGs
+    // (multi-MB); when codebuddy base64-encodes such an image into the
+    // session and then ECHOES it back in --output-format json stdout,
+    // the stdout balloons to MBs of base64. diagnoseStdout then flags
+    // that as `gibberish=true`/`truncated=true` and JSON parsing fails
+    // on every retry. Capping the longest edge at 1024px and emitting a
+    // compressed PNG keeps the file at tens of KB — the red marker is
+    // still clearly visible to the model, and the echo is harmless.
+    const MAX_EDGE = 1024;
+    const scale = Math.min(1, MAX_EDGE / Math.max(meta.width, meta.height));
+    const outW = Math.max(1, Math.round(meta.width * scale));
+    const outH = Math.max(1, Math.round(meta.height * scale));
+    // Build the marker SVG at the OUTPUT resolution so the overlay
+    // composites pixel-for-pixel onto the resized base.
+    const overlay = buildMarkerSvg(outW, outH, [
       Math.max(0, Math.min(1, clickXY[0])),
       Math.max(0, Math.min(1, clickXY[1])),
     ]);
     await sharp(parentPng)
+      .resize(outW, outH, { fit: 'fill' })
       .composite([{ input: overlay, top: 0, left: 0 }])
-      .png()
+      .png({ compressionLevel: 9, palette: true })
       .toFile(outPath);
-    log.info(`[click-marker] ${jobId} → ${outPath}`);
+    log.info(`[click-marker] ${jobId} → ${outPath} (${outW}×${outH})`);
     return outPath;
   } catch (e) {
     log.warn(`renderClickMarker failed: ${e?.message}`);
