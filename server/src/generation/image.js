@@ -77,6 +77,19 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, seedIm
       }
       prefix += '\n';
     }
+  } else if (seedDescription?.subject) {
+    // Text-to-image fallback after the original upload was dropped (e.g.
+    // for content-policy reasons). We can't image-edit, but we still have
+    // a faithful scene description extracted from the source — instruct
+    // the generator to reconstruct that subject and composition as
+    // closely as possible rather than inventing an unrelated scene.
+    prefix += 'Faithfully reconstruct the following scene as closely as possible — keep the same main subject(s), composition, layout, colours, materials and setting. Do NOT invent an unrelated scene.\n';
+    prefix += `Subject: ${seedDescription.subject}.\n`;
+    if (seedDescription.description) prefix += `Scene description: ${seedDescription.description}\n`;
+    if (seedDescription.key_features?.length) {
+      prefix += `Key elements to include: ${seedDescription.key_features.join('; ')}.\n`;
+    }
+    prefix += '\n';
   }
   const initialPrompt = [
     imageLanguageInstruction(userLang),

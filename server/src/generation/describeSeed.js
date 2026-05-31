@@ -35,15 +35,15 @@ export async function describeSeedImage({ seedImagePath, userTopic, lang = 'zh' 
   function buildPrompt({ sceneOnly }) {
     // sceneOnly mode is used as a fallback when the model refuses to
     // describe an image because it contains an identifiable person. We
-    // explicitly tell it to ignore/omit any people and describe ONLY the
-    // setting, architecture, objects and environment — which is content
-    // the model is willing to produce and which still lets the downstream
-    // text-to-image step recreate a related scene (e.g. the Forbidden City
-    // backdrop) without the real individual.
+    // tell it to anonymise ONLY the identifiable individual (replace with
+    // a generic, non-identifying figure) while STILL faithfully capturing
+    // every other key subject, object, composition and setting — so the
+    // downstream text-to-image step can closely recreate the original
+    // scene (subject + layout), just without reproducing the real person.
     const sceneRule = sceneOnly
       ? (userLang === 'en'
-          ? 'IMPORTANT: Do NOT describe, identify, or reference any person/people in the image. Treat any human as absent. Describe ONLY the setting, architecture, landmarks, objects, materials, colours, and environment. The subject must be a place/object/scene, never a person.'
-          : '重要:不要描述、识别或提及图中的任何人物,把人物当作不存在。只描述场景、建筑、地标、物体、材质、颜色和环境。subject 必须是地点/物体/场景,绝不能是人物。')
+          ? 'IMPORTANT: The image may contain an identifiable real person. Do NOT identify, name, or reproduce that specific individual. BUT do NOT discard the rest of the picture — faithfully capture EVERY other key subject, the main focal object(s), their arrangement/composition, colours, materials, setting, architecture and any visible text. If a human is the focal point, describe them only generically (e.g. "a visitor", "a standing figure") and keep their pose/placement so the scene can be recreated closely. The goal is a faithful reconstruction of the scene minus the real person\'s identity.'
+          : '重要:图中可能包含可识别的真人。不要识别、命名或复刻该具体个人。但不要因此丢弃画面其余内容——要忠实记录其他每一个关键主体、主要焦点物体、它们的布局/构图、颜色、材质、场景、建筑和任何可见文字。若人物是焦点,只用泛化方式描述(如"一位游客""一个站立的人影")并保留其姿态/位置,以便尽量贴近地复刻该场景。目标是在不暴露真人身份的前提下忠实重建画面。')
       : null;
     return [
       'You are inspecting a user-supplied source image and producing a STRUCTURED summary that downstream steps will use to build an annotated encyclopedia-style flipbook page.',
