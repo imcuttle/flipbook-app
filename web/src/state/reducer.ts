@@ -435,6 +435,11 @@ function applySse(state: AppState, evt: SseEvent): AppState {
         : { id, level: 'error', message: msg };
       let s: AppState = { ...state, toasts: [...state.toasts, next].slice(-5) };
       s = dropPending(s, evt.jobId);
+      // A hard generation failure ends the in-flight job. Reset the status
+      // out of the 'planning'/'image_loading' (busy) phase — otherwise the
+      // Generate button stays disabled / shows '…' forever after a refusal,
+      // even once we're back on the gallery.
+      s = { ...s, status: { phase: 'idle' } };
       // Root-generation failure: the planner failed for a canvas that has no
       // rendered node yet (fresh creation). The server deletes the empty
       // canvas, so the client must leave the dead "生成中…" view and return
