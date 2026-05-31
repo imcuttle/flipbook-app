@@ -300,7 +300,15 @@ function applySse(state: AppState, evt: SseEvent): AppState {
       // (analysing image / searching / planning / repairing prompt /
       // generating image / etc.) instead of just a static phase chip.
       const c = state.pendingClicks[evt.jobId];
-      if (!c) return state;
+      if (!c) {
+        // No pending-click bubble → this is ROOT generation progress (the
+        // root has no bubble; the first node doesn't exist yet). Surface it
+        // on the loading screen instead of dropping it.
+        return {
+          ...state,
+          rootProgress: { messageKey: evt.messageKey, messageEn: evt.messageEn },
+        };
+      }
       return {
         ...state,
         pendingClicks: {
@@ -397,6 +405,9 @@ function applySse(state: AppState, evt: SseEvent): AppState {
         ...state,
         nodes, tree, currentHash, rootHash,
         pendingClicks, pendingByParent,
+        // The first/root node arrived — clear the root loading-screen
+        // progress line (the Canvas now renders).
+        rootProgress: null,
       };
     }
 
@@ -439,7 +450,7 @@ function applySse(state: AppState, evt: SseEvent): AppState {
       // out of the 'planning'/'image_loading' (busy) phase — otherwise the
       // Generate button stays disabled / shows '…' forever after a refusal,
       // even once we're back on the gallery.
-      s = { ...s, status: { phase: 'idle' } };
+      s = { ...s, status: { phase: 'idle' }, rootProgress: null };
       // Root-generation failure: the planner failed for a canvas that has no
       // rendered node yet (fresh creation). The server deletes the empty
       // canvas, so the client must leave the dead "生成中…" view and return

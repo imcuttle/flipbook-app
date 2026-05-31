@@ -157,6 +157,12 @@ export type AppState = {
   // Last click position on the *parent* node, used as the zoom-in origin for
   // the next child's enter animation. Cleared after the animation triggers.
   lastDrillFrom: { parentHash: string; xy: [number, number] } | null;
+  // Latest user-facing progress line for ROOT generation (which has no
+  // pending-click bubble to attach to). Streamed via phase_message before
+  // the first node exists, so the loading screen can show the current step
+  // (analysing image / searching / planning / rewording / generating image)
+  // instead of a static "正在生成…". Cleared when the root node arrives.
+  rootProgress: { messageKey?: string; messageEn?: string } | null;
 };
 
 // localStorage-backed pref for the web-search toggle. Read once at module
@@ -197,4 +203,5 @@ export const initialState: AppState = {
   showLabels: true,
   webSearch: readWebSearchPref(),
   lastDrillFrom: null,
+  rootProgress: null,
 };

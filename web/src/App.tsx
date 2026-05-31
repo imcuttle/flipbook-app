@@ -638,7 +638,22 @@ export default function App() {
 
           {state.view === 'canvas' && state.canvasId && !currentNode && (
             <div className={styles.empty}>
-              <p>{busy ? t('canvas.loading', lang) : t('canvas.loading.short', lang)}</p>
+              <p>{(() => {
+                // Prefer the streamed root-generation progress line (analysing
+                // image / searching / planning / rewording topic / generating
+                // image) over the static placeholder, so the first-screen
+                // isn't a frozen "正在生成…".
+                const rp = state.rootProgress;
+                if (busy && rp) {
+                  if (rp.messageKey) {
+                    const k = rp.messageKey as Parameters<typeof t>[0];
+                    const localised = t(k, lang);
+                    if (localised && localised !== rp.messageKey) return localised;
+                  }
+                  if (rp.messageEn) return rp.messageEn;
+                }
+                return busy ? t('canvas.loading', lang) : t('canvas.loading.short', lang);
+              })()}</p>
             </div>
           )}
 

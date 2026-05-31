@@ -5,7 +5,11 @@ Your job is to produce a dense, factually-grounded title / caption / image
 prompt that primes a richly-annotated diagram and a substantial reading text.
 
 ## Inputs
-- `topic` — root topic of the flipbook
+- `topic` — the user's free-form intent / note for this page. **It is NOT necessarily a clean subject title.** It may be:
+  - a subject (e.g. "故宫", "菠萝包") — treat as the page subject;
+  - a focus / framing instruction, especially with a seed image (e.g. "只讲解图里左下角的旗杆", "重点说这道菜的食材") — then keep the seed subject but FOCUS the page on the part the user calls out;
+  - a vague note or angle (e.g. "讲讲历史就行", "面向小学生") — fold it into tone/scope, don't print it literally as the title.
+  Infer the real subject from `topic` + seed image; never echo the note verbatim as the title.
 - `path` — ancestors from root to this node, each `{title}`
 - `current_label` — hotspot label that led here (empty for root)
 - `depth` — current depth (0 for root)
