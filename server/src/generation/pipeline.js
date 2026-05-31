@@ -22,6 +22,7 @@ import { callDecideSearch, stubDecideSearch } from './decideSearch.js';
 import { searchWeb } from './searchWeb.js';
 import { runOcr } from './ocr.js';
 import { describeSeedImage } from './describeSeed.js';
+import { repairTopic } from './repairTopic.js';
 import { touchLastRun, updateCanvasTopic, deleteCanvas } from '../store/canvasStore.js';
 import { PlannerRefusalError } from '../lib/errors.js';
 import {
@@ -421,19 +422,72 @@ async function buildAndRegisterNode({
         throw e2;
       }
     } else {
-      broadcast(canvas, {
-        type: SseEvents.ERROR, canvasId: canvas.id, jobId,
-        phase: 'plan',
-        message: isRefusal ? e.message : String(e?.message || e),
-        code: isRefusal ? 'planner_refusal' : 'planner_error',
-        recoverable: false,
-      });
+      // Text-topic refusal (no seed image): the model objected to the
+      // TOPIC wording (a sensitive term / framing). Ask an LLM to rewrite
+      // the topic into a neutral, encyclopedia-appropriate paraphrase and
+      // retry the planner ONCE with it. Only attempt for genuine refusals
+      // (not parse errors), and only at the root level where `effectiveSubject`
+      // is the user's topic.
+      let repaired = null;
       if (isRefusal) {
-        log.warn(`[gen ${jobId}] planner refusal: ${e.message.slice(0, 200)}`);
-      } else {
-        log.error(`[gen ${jobId}] planner error:`, e?.stack || e);
+        const refusedTopic = (effectiveSubject && effectiveSubject !== '__pending__')
+          ? effectiveSubject
+          : (canvas.topic && canvas.topic !== '__pending__' ? canvas.topic : (currentLabel || ''));
+        if (refusedTopic) {
+          genLog(jobId, 'planner.topic_refused', `planner refused topic "${refusedTopic}" — trying a safer rewrite`);
+          emitPhaseMessage(canvas, jobId, 'phase.planner.repair',
+            'Rewording the topic to a safe phrasing…');
+          repaired = await repairTopic({ originalTopic: refusedTopic, refusalProse: e.message, jobId, lang });
+        }
       }
-      throw e;
+      if (repaired) {
+        try {
+          plannerJson = await plannerCall({
+            topic: repaired,
+            path: parentNode?.path ?? [],
+            currentLabel: currentLabel ?? '',
+            depth,
+            maxDepth: 99,
+            sources,
+            seedImagePath,
+            seedDescription,
+            lang,
+          });
+          genLog(jobId, 'planner.topic_refused',
+            `→ retried with "${repaired}" OK "${plannerJson.title}" (${Date.now() - tPlanner}ms)`);
+          // If this is the root, sync the canvas topic to the rewritten one
+          // so the gallery/title reflect the safe phrasing rather than the
+          // refused original (which never produced a node).
+          if (!parentNode) {
+            try { await updateCanvasTopic(canvas.id, repaired); canvas.topic = repaired; } catch { /* non-fatal */ }
+          }
+        } catch (e3) {
+          // The rewrite also failed — surface the ORIGINAL refusal and abort.
+          broadcast(canvas, {
+            type: SseEvents.ERROR, canvasId: canvas.id, jobId,
+            phase: 'plan',
+            message: e.message,
+            code: 'planner_refusal',
+            recoverable: false,
+          });
+          log.warn(`[gen ${jobId}] planner topic-repair retry failed: ${e3?.message}`);
+          throw e;
+        }
+      } else {
+        broadcast(canvas, {
+          type: SseEvents.ERROR, canvasId: canvas.id, jobId,
+          phase: 'plan',
+          message: isRefusal ? e.message : String(e?.message || e),
+          code: isRefusal ? 'planner_refusal' : 'planner_error',
+          recoverable: false,
+        });
+        if (isRefusal) {
+          log.warn(`[gen ${jobId}] planner refusal: ${e.message.slice(0, 200)}`);
+        } else {
+          log.error(`[gen ${jobId}] planner error:`, e?.stack || e);
+        }
+        throw e;
+      }
     }
   }
   // From here on, use the (possibly seed-dropped) effective values.

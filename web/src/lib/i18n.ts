@@ -136,6 +136,7 @@ export const messages: Catalogue = {
   'phase.seed.describe':   { zh: '正在分析您上传的图片…',           en: 'Analysing your image…' },
   'phase.search':          { zh: '正在联网搜索资料…',                en: 'Searching the web for facts…' },
   'phase.planner':         { zh: '正在拟标题、说明和画面构图…',      en: 'Drafting title, caption and scene…' },
+  'phase.planner.repair':  { zh: '主题被拒绝,正在换用更稳妥的措辞重试…', en: 'Topic declined — rewording to a safe phrasing…' },
   'phase.image.gen':       { zh: '正在生成图片…',                    en: 'Generating illustration…' },
   'phase.image.edit':      { zh: '基于您的图片生成带标注的画面…',    en: 'Generating annotated image from your upload…' },
   'phase.image.repair':    { zh: '图像模型暂时拒绝,正在改写提示…',  en: 'Image model declined — refining prompt…' },
