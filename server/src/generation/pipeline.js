@@ -6,7 +6,7 @@
 //     against existing hotspots, then runs full plan+image for the child node,
 //     and appends a hotspot to the parent.
 import { nanoid } from 'nanoid';
-import { config } from '../config.js';
+import { config, resolveImageSize } from '../config.js';
 import { hashNode } from '../lib/hash.js';
 import {
   nodeExists, readNode, registerNode, writeNode, countNodes,
@@ -564,6 +564,9 @@ async function buildAndRegisterNode({
       seedImagePath,
       seedDescription,
       lang,
+      // Per-canvas orientation → portrait/landscape image size. Shared by
+      // root and click-driven nodes (both reach this single call site).
+      size: resolveImageSize(canvas.orientation),
       // Forward image-orchestrator phase events (start / repair / retry /
       // done / fallback) into SSE phase_message events so the user can
       // see the LLM-driven prompt-repair retry happen in real time.

@@ -101,6 +101,12 @@ export const messages: Catalogue = {
   'topbar.web': { zh: '联网搜索', en: 'Web search' },
   'topbar.compose-on-click': { zh: '长按输入', en: 'Long-press input' },
   'topbar.labels': { zh: '热点标签', en: 'Hotspot labels' },
+  'topbar.orientation': { zh: '画面方向', en: 'Orientation' },
+  'topbar.orientation.landscape': { zh: '宽屏', en: 'Landscape' },
+  'topbar.orientation.portrait': { zh: '竖屏', en: 'Portrait' },
+  'canvas.image.enlarge': { zh: '查看大图', en: 'View image' },
+  'canvas.image.download': { zh: '下载图片', en: 'Download' },
+  'canvas.image.close': { zh: '关闭', en: 'Close' },
   'topbar.regenerate': { zh: '重新生成', en: 'Re-roll' },
   'topbar.regenerate.info': { zh: '查看生成输入', en: 'Show generation inputs' },
   'topbar.regenerate.input.topic': { zh: '主题', en: 'Topic' },
@@ -109,6 +115,7 @@ export const messages: Catalogue = {
   'topbar.regenerate.input.image': { zh: '上传图片', en: 'Uploaded image' },
   'topbar.regenerate.input.none': { zh: '无', en: '—' },
   'topbar.more': { zh: '更多', en: 'More' },
+  'breadcrumb.more': { zh: '选择层级', en: 'Jump to level' },
 
   // Sentinel topic shown while a canvas created from an image-only upload
   // is still being titled by the planner. Server records '__pending__';

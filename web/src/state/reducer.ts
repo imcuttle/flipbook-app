@@ -1,5 +1,5 @@
 import type { AppState, Node, SseEvent, Tree, Toast, View, PendingClick } from './types';
-import { initialState, persistWebSearchPref } from './types';
+import { initialState, persistWebSearchPref, persistOrientationPref } from './types';
 
 export type Action =
   | { type: 'reset' }
@@ -14,6 +14,7 @@ export type Action =
   | { type: 'toggle_chrome' }
   | { type: 'toggle_labels' }
   | { type: 'toggle_web_search' }
+  | { type: 'set_orientation'; orientation: 'landscape' | 'portrait' }
   | { type: 'consume_drill_origin' }
   | { type: 'add_toast'; toast: Omit<Toast, 'id'> }
   | { type: 'remove_toast'; id: number };
@@ -56,6 +57,7 @@ export function reducer(state: AppState, action: Action): AppState {
           toasts: state.toasts,
           // Preserve UI prefs that aren't tied to a specific canvas.
           webSearch: state.webSearch,
+          orientation: state.orientation,
         };
       }
       return { ...state, view: action.view };
@@ -70,6 +72,8 @@ export function reducer(state: AppState, action: Action): AppState {
         // Preserve UI prefs across canvas creation so a user who turned web
         // search off doesn't have it silently re-enabled on the next topic.
         webSearch: state.webSearch,
+        // The new canvas was created with the current orientation pref.
+        orientation: state.orientation,
       };
 
     case 'set_share_mode':
@@ -84,7 +88,17 @@ export function reducer(state: AppState, action: Action): AppState {
       };
 
     case 'set_tree':
-      return { ...state, tree: action.tree, rootHash: state.rootHash ?? action.tree.root };
+      return {
+        ...state,
+        tree: action.tree,
+        rootHash: state.rootHash ?? action.tree.root,
+        // Adopt the opened canvas's fixed orientation so the stage renders
+        // with the correct aspect. Legacy trees without the field stay at
+        // whatever the current pref is (they were all landscape).
+        orientation: action.tree.orientation === 'portrait' ? 'portrait'
+          : action.tree.orientation === 'landscape' ? 'landscape'
+          : state.orientation,
+      };
 
     case 'navigate': {
       const nextNode = state.nodes[action.hash];
@@ -149,6 +163,13 @@ export function reducer(state: AppState, action: Action): AppState {
       // recorded its own value.
       persistWebSearchPref(next);
       return { ...state, webSearch: next };
+    }
+
+    case 'set_orientation': {
+      // Create-time preference for the next canvas. Persisted so it survives
+      // reloads; existing canvases keep their own fixed orientation.
+      persistOrientationPref(action.orientation);
+      return { ...state, orientation: action.orientation };
     }
 
     case 'consume_drill_origin':

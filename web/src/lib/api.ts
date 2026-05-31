@@ -4,7 +4,7 @@ const API = '/api';
 
 export async function createCanvas(
   topic: string,
-  opts: { webSearch?: boolean; image?: File | Blob | null; lang?: 'zh' | 'en' } = {},
+  opts: { webSearch?: boolean; image?: File | Blob | null; lang?: 'zh' | 'en'; orientation?: 'landscape' | 'portrait' } = {},
 ): Promise<{ canvasId: string; jobId: string }> {
   // When the user attaches an image, switch to multipart so the server's
   // /upload variant kicks in and seeds the canvas with the user's picture.
@@ -13,6 +13,7 @@ export async function createCanvas(
     fd.append('topic', topic);
     fd.append('lang', opts.lang ?? 'zh');
     if (opts.webSearch === false) fd.append('webSearch', '0');
+    if (opts.orientation) fd.append('orientation', opts.orientation);
     fd.append('image', opts.image, 'seed.png');
     const res = await fetch(`${API}/canvas/upload`, { method: 'POST', body: fd });
     if (!res.ok) throw new Error(`createCanvas (upload) failed: ${res.status}`);
@@ -21,7 +22,7 @@ export async function createCanvas(
   const res = await fetch(`${API}/canvas`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic, webSearch: opts.webSearch, lang: opts.lang ?? 'zh' }),
+    body: JSON.stringify({ topic, webSearch: opts.webSearch, lang: opts.lang ?? 'zh', orientation: opts.orientation ?? 'landscape' }),
   });
   if (!res.ok) throw new Error(`createCanvas failed: ${res.status}`);
   return res.json();

@@ -47,6 +47,7 @@ This product is an **encyclopedia / knowledge-compendium**. The IMAGE itself sho
   - quantitative facts (sizes, years, populations, percentages),
   - what each visual zone of the image covers (so the caption reads like a museum placard).
   Avoid filler / marketing language; never repeat the title; cite specifics from `sources` when provided.
+  - You MAY use inline markdown bold (`**…**`) to emphasise a FEW core terms — the single most important proper noun, a key year, or a defining number. Use it sparingly: at most 2–3 bold spans, never whole clauses. No other markdown (no italics, headings, lists, links or backticks) in the caption.
 - `image_prompt` describes **6+ visually distinct, individually annotatable zones** in one coherent scene; each zone contains **multiple small distinct objects** for visual richness.
 - **Each zone should carry rich in-image text annotations** drawn into the image:
   - 1 short title per zone (2–6 words / 字, like a diagram heading) — required.

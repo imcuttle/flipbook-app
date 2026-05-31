@@ -25,6 +25,10 @@ import {
   RotateCcw,         // ↻ regenerate / re-roll
   MousePointerClick, // 🖱 long-press / compose-on-click toggle
   Info,              // ⓘ info hover
+  RectangleHorizontal, // ▭ landscape orientation
+  RectangleVertical,   // ▯ portrait orientation
+  Download,            // ⬇ download image
+  ZoomIn,              // 🔍 enlarge / open image view
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -53,6 +57,10 @@ const REGISTRY = {
   regenerate: RotateCcw,
   'long-press': MousePointerClick,
   info: Info,
+  'orient-landscape': RectangleHorizontal,
+  'orient-portrait': RectangleVertical,
+  download: Download,
+  'zoom-in': ZoomIn,
 } as const;
 
 export type IconName = keyof typeof REGISTRY;

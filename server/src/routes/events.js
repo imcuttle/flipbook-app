@@ -12,7 +12,13 @@ eventsRouter.get('/:id/events', async (req, res) => {
   if (!isSafeId(id)) return res.status(400).json({ error: 'bad_id' });
   const runtime = await getCanvas(id);
   if (!runtime) return res.status(404).json({ error: 'not_found' });
-  attach(runtime, res);
+  // Last-Event-ID lets a briefly-disconnected client replay the frames it
+  // missed. Standard EventSource sends it as a request header on native
+  // auto-reconnect; our manual reconnect (useCanvasSSE) can't set headers
+  // on EventSource, so it passes ?lastEventId= as a query param. Accept
+  // either, preferring the header (native reconnect path).
+  const lastEventId = req.get('Last-Event-ID') ?? req.query.lastEventId ?? null;
+  attach(runtime, res, lastEventId);
   // If a ROOT generation is currently in flight (no persisted node yet),
   // re-send planning_started so a freshly-(re)connected client restores
   // its in-progress UI instead of showing a blank "生成中…". planning_started

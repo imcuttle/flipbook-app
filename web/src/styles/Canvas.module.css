@@ -34,6 +34,12 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
+/* Portrait canvases: 9:16 instead of the default 16:9. The wrapper's
+   max-width/max-height caps still mediate so the stage fits its box. */
+.stagePortrait {
+  aspect-ratio: 9 / 16;
+}
+
 /* Scene transitions — driven by `key={node.hash}` on the stage so each new
    node is a fresh DOM element with the entrance animation re-applied. */
 .stage.enterDrill {
@@ -94,6 +100,19 @@
   /* user-select stays default so the TextLayer overlay above can be
      selected. The image itself can't be dragged or selected as an image. */
   -webkit-user-drag: none;
+  /* Suppress iOS Safari's long-press "save image / copy" callout overlay.
+     On the canvas, long-press is OUR drilldown gesture — the native callout
+     overlaps it and makes the interaction feel broken. Re-enabled in
+     read-only / preview mode below, where long-press has no drilldown role
+     and users legitimately want to save the picture. */
+  -webkit-touch-callout: none;
+}
+
+/* Preview / read-only: restore the native long-press callout so viewers can
+   save the image (no drilldown gesture to conflict with here). */
+.stageReadOnly .image,
+.stageReadOnly .imageSvg {
+  -webkit-touch-callout: default;
 }
 
 .shimmer {
@@ -140,6 +159,19 @@
   line-height: 1.5;
   max-width: 920px;
   align-self: center;
+}
+
+/* Inline markdown marks rendered inside a caption. */
+.caption strong { font-weight: 700; color: var(--ink); }
+.caption em { font-style: italic; }
+.caption del { opacity: 0.7; }
+.caption a { color: var(--accent); text-decoration: underline; }
+.caption code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgba(31, 31, 31, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 .hint {
@@ -235,7 +267,33 @@
   transform: translate(-10px, 10px);
 }
 
-.readOnlyBadge svg { display: block; }
+.readOnlyBadge svg { display: block; margin: auto; }
+
+/* Mobile enlarge / view-image button — bottom-right of the stage, away from
+   the top-right capacity / read-only badges. Sized to match .readOnlyBadge
+   (28px circle, shrinking on small screens) for visual consistency. */
+.enlargeBtn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 6;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(31, 31, 31, 0.78);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(2px);
+}
+
+.enlargeBtn:active { background: rgba(31, 31, 31, 0.92); }
+.enlargeBtn svg { display: block; width: 15px; height: 15px; }
 
 /* Mobile-friendly tweaks */
 @media (max-width: 720px) {
@@ -263,6 +321,8 @@
      the chip stays inside the painted image. */
   .readOnlyBadge { width: 22px; height: 22px; transform: translate(-6px, 6px); }
   .readOnlyBadge svg { width: 11px; height: 11px; }
+  .enlargeBtn { width: 26px; height: 26px; bottom: 10px; right: 10px; }
+  .enlargeBtn svg { width: 14px; height: 14px; }
 }
 
 @media (max-width: 480px) {
@@ -273,4 +333,6 @@
   }
   .readOnlyBadge { width: 20px; height: 20px; transform: translate(-4px, 4px); }
   .readOnlyBadge svg { width: 10px; height: 10px; }
+  .enlargeBtn { width: 24px; height: 24px; bottom: 8px; right: 8px; }
+  .enlargeBtn svg { width: 13px; height: 13px; }
 }

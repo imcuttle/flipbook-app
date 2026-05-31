@@ -17,6 +17,10 @@ export const config = {
   plannerTimeoutMs: Number(process.env.PLANNER_TIMEOUT_MS || 90_000),
   imageTimeoutMs: Number(process.env.IMAGE_TIMEOUT_MS || 180_000),
   imageSize: process.env.IMAGE_SIZE || '1920x1080',
+  // Portrait counterpart of imageSize, used when a canvas was created with
+  // orientation='portrait' (e.g. a phone held upright). Landscape stays the
+  // default for back-compat with every existing canvas.
+  imageSizePortrait: process.env.IMAGE_SIZE_PORTRAIT || '1080x1920',
   // Comma-separated provider chain. First enabled provider wins; 'svg' is
   // always appended as the final fallback. Supported: codebuddy, openai,
   // nanobanana, seeddance, svg.
@@ -31,3 +35,18 @@ export const config = {
   ocrMinConfidence: Number(process.env.OCR_MIN_CONFIDENCE || 0.4),
   ocrMaxSpans: Number(process.env.OCR_MAX_SPANS || 200),
 };
+
+// Map a canvas orientation to its image size string ("WxH"). Anything other
+// than the literal 'portrait' (including undefined / legacy canvases) maps
+// to the landscape default.
+export function resolveImageSize(orientation) {
+  return orientation === 'portrait' ? config.imageSizePortrait : config.imageSize;
+}
+
+// Parse a "WxH" size string into { width, height }. Falls back to 1920x1080
+// when the input is malformed.
+export function parseSize(size) {
+  const m = /^(\d+)\s*[x×]\s*(\d+)$/i.exec(String(size ?? '').trim());
+  if (!m) return { width: 1920, height: 1080 };
+  return { width: Number(m[1]), height: Number(m[2]) };
+}

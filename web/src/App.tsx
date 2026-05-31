@@ -13,6 +13,7 @@ import { useCanvasSSE } from './hooks/useCanvasSSE';
 import { createCanvas, clickAt, getNode, getTree, createShareLink, resolveShareLink, deleteNode, regenerateNode, cancelHotspot } from './lib/api';
 import { useLang, t, displayTopic } from './lib/i18n';
 import { revokeSelection, type ImageSelection } from './lib/imageUpload';
+import { copyToClipboard } from './lib/clipboard';
 
 function readUrlState() {
   const url = new URL(window.location.href);
@@ -234,6 +235,7 @@ export default function App() {
         webSearch: state.webSearch,
         image: topicAttachment?.file ?? null,
         lang,
+        orientation: state.orientation,
       });
       // Sync the in-memory topic to whatever the server stored. When only
       // an image was uploaded, the server uses '__pending__' as a sentinel
@@ -253,7 +255,7 @@ export default function App() {
     } finally {
       setSubmitting(false);
     }
-  }, [draftTopic, state.readOnly, state.webSearch, topicAttachment, submitting, lang]);
+  }, [draftTopic, state.readOnly, state.webSearch, state.orientation, topicAttachment, submitting, lang]);
 
   const onImageClick = useCallback(async (xy: [number, number]) => {
     if (state.readOnly) return;
@@ -494,19 +496,24 @@ export default function App() {
     // read-only). We still call createShareLink so the existence is logged
     // server-side for future analytics; the token isn't used in the URL.
     try {
-      // Best-effort: register the share for server-side bookkeeping.
-      try { await createShareLink(state.canvasId); } catch { /* ignore */ }
       const url = new URL(window.location.origin);
       url.searchParams.set('c', state.canvasId);
       if (state.currentHash) url.searchParams.set('n', state.currentHash);
       url.searchParams.set('mode', 'preview');
       const fullUrl = url.toString();
-      try {
-        await navigator.clipboard.writeText(fullUrl);
-        dispatch({ type: 'add_toast', toast: { level: 'info', message: `Share link copied: ${fullUrl}` } });
-      } catch {
-        dispatch({ type: 'add_toast', toast: { level: 'info', message: `Share link: ${fullUrl}` } });
-      }
+      // Copy FIRST, synchronously within the user-gesture turn. Safari only
+      // honours a clipboard write while the gesture is still "active"; doing
+      // an `await createShareLink(...)` before the copy breaks that chain and
+      // the write silently no-ops. So we register the share AFTER copying.
+      const copied = await copyToClipboard(fullUrl);
+      // Best-effort server-side bookkeeping — fire-and-forget, after the copy.
+      void createShareLink(state.canvasId).catch(() => { /* ignore */ });
+      dispatch({
+        type: 'add_toast',
+        toast: copied
+          ? { level: 'info', message: `Share link copied: ${fullUrl}` }
+          : { level: 'info', message: `Share link: ${fullUrl}` },
+      });
     } catch (e) {
       dispatch({ type: 'add_toast', toast: { level: 'error', message: `Share failed: ${(e as Error).message}` } });
     }
@@ -537,6 +544,10 @@ export default function App() {
   const onToggleWebSearch = useCallback(() => {
     dispatch({ type: 'toggle_web_search' });
   }, []);
+
+  const onToggleOrientation = useCallback(() => {
+    dispatch({ type: 'set_orientation', orientation: state.orientation === 'portrait' ? 'landscape' : 'portrait' });
+  }, [state.orientation]);
 
   const currentNode = state.currentHash ? state.nodes[state.currentHash] : null;
   // `busy` covers two distinct in-flight states:
@@ -615,6 +626,8 @@ export default function App() {
           onToggleChrome={onToggleChrome}
           onToggleLabels={onToggleLabels}
           onToggleWebSearch={onToggleWebSearch}
+          onToggleOrientation={onToggleOrientation}
+          orientation={state.orientation}
           onToggleComposeOnClick={() => setComposeOnClick((v) => !v)}
           onRegenerate={onRegenerate}
           attachment={topicAttachment}

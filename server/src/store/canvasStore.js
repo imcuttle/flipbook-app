@@ -21,10 +21,12 @@ async function ensureCanvasDirs(id) {
   await fs.mkdir(path.join(dir, 'images'), { recursive: true });
 }
 
-export async function createCanvas({ topic, branches = 5 }) {
+export async function createCanvas({ topic, branches = 5, orientation = 'landscape' }) {
   if (!topic || typeof topic !== 'string' || !topic.trim()) {
     throw new Error('topic required');
   }
+  // Only 'portrait' is special; anything else normalises to landscape.
+  const orient = orientation === 'portrait' ? 'portrait' : 'landscape';
   await ensureCanvasesRoot();
   const id = nanoid(12);
   const slug = slugify(topic);
@@ -37,6 +39,7 @@ export async function createCanvas({ topic, branches = 5 }) {
     root: null,
     branches,
     style: 'isometric-illustration',
+    orientation: orient,
     nodes: {},
   };
   await writeJsonAtomic(paths.treePath(id), tree);
@@ -46,6 +49,7 @@ export async function createCanvas({ topic, branches = 5 }) {
     topic,
     slug,
     branches,
+    orientation: orient,
     created_at: now,
     last_run_at: now,
   };
@@ -63,6 +67,7 @@ export async function createCanvas({ topic, branches = 5 }) {
     topic,
     slug,
     branches,
+    orientation: orient,
     queue: new PerCanvasQueue(),
     sseClients: new Set(),
     createdAt: now,
@@ -99,6 +104,9 @@ export async function getCanvas(id) {
     topic: manifest.topic,
     slug: manifest.slug,
     branches: manifest.branches ?? 5,
+    // Legacy canvases (created before orientation existed) default to
+    // landscape.
+    orientation: manifest.orientation === 'portrait' ? 'portrait' : 'landscape',
     queue: new PerCanvasQueue(),
     sseClients: new Set(),
     createdAt: manifest.created_at,

@@ -1,0 +1,66 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  animation: lbFade 140ms ease-out both;
+  /* Keep all touch gestures contained: no page overscroll / pull-to-refresh
+     / pull-to-close leaking out behind the viewer. */
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+@keyframes lbFade { from { opacity: 0 } to { opacity: 1 } }
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+
+.toolBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toolBtn:hover { background: rgba(255, 255, 255, 0.24); }
+
+/* Scrollable image area. We handle pinch/pan via JS transforms on the img,
+   so the surface itself must not let the browser hijack the touch gesture. */
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 16px 16px;
+  touch-action: none;
+  cursor: zoom-out;
+}
+
+.img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  cursor: default;
+  transform-origin: center center;
+  will-change: transform;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

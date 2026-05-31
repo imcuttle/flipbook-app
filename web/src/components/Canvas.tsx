@@ -7,10 +7,13 @@ import { TreeBadge } from './TreeBadge';
 import { LongPressIndicator } from './LongPressIndicator';
 import { TextLayer } from './TextLayer';
 import { Icon } from './Icon';
+import { ImageLightbox } from './ImageLightbox';
+import { CaptionMarkdown } from './CaptionMarkdown';
 import { imageUrl } from '../lib/api';
 import { clamp01, pct } from '../lib/geometry';
 import { layOutHotspots } from '../lib/layout';
 import { useLang, t } from '../lib/i18n';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const MAX_PARALLEL_PER_NODE = 4;
 const LONG_PRESS_MS = 1000;
@@ -49,17 +52,30 @@ const PHASE_KEY: Record<PendingClick['phase'], 'phase.planning' | 'phase.image' 
 
 export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, readOnly, showChrome, showLabels, fullscreen, enterMode = 'none', originXY, onImageClick, onHotspotClick, onHotspotDelete, onJumpToHash, overlay, onImageRectChange }: Props) {
   const [lang] = useLang();
+  const isMobile = useIsMobile();
+  const isPortrait = tree?.orientation === 'portrait';
+  // Leader-line SVG viewBox height. The SVG uses preserveAspectRatio="none",
+  // so its viewBox height MUST match the stage's real aspect or circles draw
+  // as ellipses. Width is always 100; height = 100 / aspect. Landscape 16:9 →
+  // 56.25; portrait 9:16 → 177.78.
+  const vbH = isPortrait ? +(100 * 16 / 9).toFixed(2) : 56.25;
   const hasImage = !!node?.image;
   const src = node?.image ? imageUrl(canvasId, node.image) : '';
   const isSvg = src.endsWith('.svg');
   const atCapacity = pendingClicks.length >= MAX_PARALLEL_PER_NODE;
   const interactive = !readOnly && hasImage && !imageLoading && !atCapacity;
+  // Enlarged single-image viewer (download + pinch-zoom). Mobile shows an
+  // explicit enlarge button; the lightbox itself works on any viewport.
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   // Long-press tracking. Click became "press and hold for 1 s" — gives users
   // an explicit Are-you-sure moment and prevents accidental drilldown clicks.
   const [pressXY, setPressXY] = useState<[number, number] | null>(null);
   const pressTimerRef = useRef<number | null>(null);
   const pressStartPxRef = useRef<{ x: number; y: number } | null>(null);
+  // Active touch/pen/mouse pointers on the stage, tracked so a second finger
+  // (pinch-to-zoom) cancels any pending long-press instead of drilling down.
+  const activePointersRef = useRef<Set<number>>(new Set());
 
   const cancelPress = () => {
     if (pressTimerRef.current !== null) {
@@ -78,6 +94,15 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
     if (!interactive || !node) return;
     // Ignore non-primary buttons (right click etc.)
     if (e.button !== undefined && e.button !== 0) return;
+    // Track this pointer. If a second pointer is already (or now) down, the
+    // user is pinch-zooming / multi-touching — cancel any pending long-press
+    // and don't start a new one. Otherwise a two-finger zoom gesture would
+    // accidentally fire a drilldown.
+    activePointersRef.current.add(e.pointerId);
+    if (activePointersRef.current.size > 1) {
+      cancelPress();
+      return;
+    }
     // If the pointerdown landed on a TextLayer span, the user is selecting
     // text — don't start a long-press timer. (`closest` walks up the DOM so
     // it works even if the target is a child node of the span.)
@@ -112,8 +137,17 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
     if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) cancelPress();
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    activePointersRef.current.delete(e.pointerId);
     // Released before the long-press fired → cancel.
+    cancelPress();
+  };
+
+  // pointercancel fires when the browser takes over the gesture (e.g. a
+  // pinch-zoom is recognised) — drop the pointer and cancel any pending
+  // long-press so the gesture doesn't leave a stale active pointer behind.
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    activePointersRef.current.delete(e.pointerId);
     cancelPress();
   };
 
@@ -242,9 +276,9 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
         const r = btn.getBoundingClientRect();
         next[idx] = {
           l: ((r.left - stageRect.left) / stageRect.width) * 100,
-          t: ((r.top - stageRect.top) / stageRect.height) * 56.25,
+          t: ((r.top - stageRect.top) / stageRect.height) * vbH,
           w: (r.width / stageRect.width) * 100,
-          h: (r.height / stageRect.height) * 56.25,
+          h: (r.height / stageRect.height) * vbH,
         };
       }
       setCardRects(next);
@@ -255,7 +289,7 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
     // Re-measure when the stage's vertical extent changes (chrome / fullscreen
     // toggles add or remove the title / caption / hint blocks above/below).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node?.hash, layouts.length, JSON.stringify(layouts.map((l) => [l.idx, l.anchor[0], l.anchor[1]])), showChrome, fullscreen]);
+  }, [node?.hash, layouts.length, JSON.stringify(layouts.map((l) => [l.idx, l.anchor[0], l.anchor[1]])), showChrome, fullscreen, vbH]);
 
   // Compute where the leader line should touch the card box: project the
   // leader endpoint onto the card edge nearest to it (so the line never
@@ -275,6 +309,10 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
   }
 
   let stageClass = styles.stage;
+  // Portrait canvases flip the stage aspect to 9:16 so the taller image
+  // fills the box without pillarboxing. Orientation is a per-canvas
+  // property carried on the tree.
+  if (tree?.orientation === 'portrait') stageClass += ` ${styles.stagePortrait}`;
   if (readOnly) stageClass += ` ${styles.stageReadOnly}`;
   else if (atCapacity) stageClass += ` ${styles.stageBusy}`;
   else if (hasImage && !imageLoading) stageClass += ` ${styles.stageClickable}`;
@@ -310,7 +348,7 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={cancelPress}
+        onPointerCancel={handlePointerCancel}
         onPointerLeave={cancelPress}
         role={interactive ? 'button' : undefined}
         aria-label={node && interactive ? `Press and hold anywhere on the image of ${node.title} to drill down` : undefined}
@@ -320,19 +358,35 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
             ? <object className={styles.imageSvg} data={src} type="image/svg+xml" aria-label={node?.title ?? ''} />
             : <img ref={imgRef} className={styles.image} src={src} alt={node?.title ?? ''} draggable={false} />
         )}
+        {/* Enlarge / view-image affordance. Shown on mobile (where there's no
+            hover and the image fills a small screen) once a real raster image
+            is present. Stops pointer propagation so it never starts a
+            long-press drilldown. */}
+        {hasImage && !isSvg && !imageLoading && isMobile && (
+          <button
+            type="button"
+            className={styles.enlargeBtn}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); setLightboxOpen(true); }}
+            aria-label={t('canvas.image.enlarge', lang)}
+            title={t('canvas.image.enlarge', lang)}
+          >
+            <Icon name="zoom-in" size={16} />
+          </button>
+        )}
         {(imageLoading || !hasImage) && <div className={styles.shimmer} aria-hidden />}
 
         {/* Leader lines: card edge to leader point */}
         {node && layouts.length > 0 && (
           <svg
             className={styles.leaderSvg}
-            viewBox="0 0 100 56.25"
+            viewBox={`0 0 100 ${vbH}`}
             preserveAspectRatio="none"
             aria-hidden
           >
             {layouts.map(({ idx, leader }) => {
               const tx = leader[0] * 100;
-              const ty = leader[1] * 56.25;
+              const ty = leader[1] * vbH;
               const card = cardRects[idx];
               // Until the card has been measured, fall back to a no-op (skip
               // drawing rather than draw to a wrong guessed point).
@@ -448,18 +502,24 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
         )}
       </div>
       </div>
-      {showChrome && node?.caption && <p className={styles.caption}>{node.caption}</p>}
+      {showChrome && node?.caption && <CaptionMarkdown text={node.caption} className={styles.caption} />}
       {showChrome && !fullscreen && node && !readOnly && (
         <p className={styles.hint}>
-          {atCapacity
-            ? t('canvas.cap.full', lang)
-            : t('canvas.hint.press', lang)}
+          {t('canvas.hint.press', lang)}
         </p>
       )}
       {showChrome && !fullscreen && node && readOnly && (
         <p className={styles.hint}>
           {t('canvas.preview.hint', lang)}
         </p>
+      )}
+      {lightboxOpen && hasImage && !isSvg && (
+        <ImageLightbox
+          src={src}
+          alt={node?.title ?? ''}
+          downloadName={node?.title ?? 'flipbook'}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
     </>
   );

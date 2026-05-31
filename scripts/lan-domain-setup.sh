@@ -74,6 +74,21 @@ EOF
 info "重启 dnsmasq（需要 sudo，监听 53 端口）"
 sudo brew services restart dnsmasq
 
+# --- macOS resolver: 把该 TLD 委派给本机 dnsmasq ----------------------------
+# dnsmasq 已能解析(dig @127.0.0.1 OK)，但 macOS 系统解析默认仍走路由器 DNS，
+# 不会问本机 dnsmasq —— 这正是「dig @127.0.0.1 通、浏览器却打不开」的根因。
+# 在 /etc/resolver/<tld> 写一条，告诉系统：凡是该 TLD 的域名都交给 127.0.0.1。
+# 仅对本机生效（局域网其它设备仍按文末三选一配置 DNS）。
+TLD="${DOMAIN##*.}"
+RESOLVER_FILE="/etc/resolver/${TLD}"
+if [[ ! -f "${RESOLVER_FILE}" ]] || ! grep -q "nameserver 127.0.0.1" "${RESOLVER_FILE}" 2>/dev/null; then
+  info "委派 .${TLD} 给本机 dnsmasq（需要 sudo，写 ${RESOLVER_FILE}）"
+  sudo mkdir -p /etc/resolver
+  printf 'nameserver 127.0.0.1\n' | sudo tee "${RESOLVER_FILE}" >/dev/null
+else
+  info "resolver 已存在: ${RESOLVER_FILE}"
+fi
+
 # --- Caddy: 反向代理 域名:80 → dev(优先) / prod(回退) -------------------------
 mkdir -p "${CADDY_DIR}"
 info "写入 Caddyfile: ${CADDYFILE}"
@@ -85,7 +100,7 @@ http://${DOMAIN} {
 	# lb_policy first = 永远先试第一个(dev)，仅当它被标记为不健康时才用下一个。
 	# 被动健康检查：连不上/5xx 时把 dev 拉黑 3s，期间流量走 prod；
 	# 之后再自动试探 dev，dev 起来了就切回去。
-	reverse_proxy localhost:${DEV_PORT} localhost:${PROD_PORT} {
+	reverse_proxy 127.0.0.1:${DEV_PORT} 127.0.0.1:${PROD_PORT} {
 		lb_policy first
 		fail_duration 3s
 		max_fails 1
@@ -102,9 +117,15 @@ sudo caddy start --config "${CADDYFILE}" --adapter caddyfile
 echo
 info "本机自检解析:"
 if dig +short "@127.0.0.1" "${DOMAIN}" | grep -q "${LAN_IP}"; then
-  printf '   %s\n' "${GRN}${DOMAIN} → ${LAN_IP} ✓${RST}"
+  printf '   %s\n' "${GRN}dnsmasq: ${DOMAIN} → ${LAN_IP} ✓${RST}"
 else
   warn "dnsmasq 解析自检未通过（可能 dnsmasq 尚未就绪，可稍后重试 dig @127.0.0.1 ${DOMAIN}）"
+fi
+# 走系统真实解析路径（即浏览器/curl 用的路径），验证 /etc/resolver 委派是否生效
+if dscacheutil -q host -a name "${DOMAIN}" 2>/dev/null | grep -q "${LAN_IP}"; then
+  printf '   %s\n' "${GRN}系统解析: ${DOMAIN} → ${LAN_IP} ✓${RST}"
+else
+  warn "系统解析自检未通过（resolver 可能需几秒生效，可重试: dscacheutil -q host -a name ${DOMAIN}）"
 fi
 
 cat <<EOF
@@ -125,8 +146,8 @@ dev 没起时自动回退到 prod(${PROD_PORT})。
      在该设备的 hosts 文件加一行：
        ${LAN_IP}  ${DOMAIN}
 
-${DIM}本机自己访问 http://${DOMAIN} 通常已可用（dnsmasq 在本机 53）。
-若不通，把本机「Wi-Fi → DNS」也加上 ${LAN_IP}。${RST}
+${DIM}本机已自动配置 /etc/resolver/${TLD}，浏览器直接访问 http://${DOMAIN} 即可。
+（resolver 刚写入时偶尔需几秒生效；仍不通可执行 dscacheutil -flushcache）${RST}
 
 撤销: ${BOLD}npm run lan:down${RST}（或 scripts/lan-domain-teardown.sh ${DOMAIN}）
 EOF

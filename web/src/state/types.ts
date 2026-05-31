@@ -66,6 +66,7 @@ export type Node = {
   root: string | null;
   branches: number;
   style: string;
+  orientation?: 'landscape' | 'portrait';
   nodes: Record<string, { title: string; depth: number; parent: string | null; children: string[] }>;
 };
 
@@ -154,6 +155,11 @@ export type AppState = {
   showChrome: boolean;                     // breadcrumb / caption / hint visibility in fullscreen
   showLabels: boolean;                     // hotspot card overlay visibility
   webSearch: boolean;                      // ask the planner to consult the web before generating
+  // Image orientation for the NEXT canvas to be created. Per-canvas: fixed at
+  // creation time. When viewing an existing canvas this reflects that
+  // canvas's orientation (adopted from its manifest); on the gallery it's the
+  // user's create-time preference.
+  orientation: 'landscape' | 'portrait';
   // Last click position on the *parent* node, used as the zoom-in origin for
   // the next child's enter animation. Cleared after the animation triggers.
   lastDrillFrom: { parentHash: string; xy: [number, number] } | null;
@@ -184,6 +190,28 @@ export function persistWebSearchPref(on: boolean) {
   try { window.localStorage.setItem(WEB_SEARCH_KEY, on ? '1' : '0'); } catch {}
 }
 
+// localStorage-backed pref for the create-time image orientation. When no
+// value is stored, default by device: a phone-sized viewport held UPRIGHT
+// (height > width) defaults to portrait; everything else (desktop, landscape
+// phone/tablet) defaults to landscape.
+const ORIENTATION_KEY = 'flipbook_orientation';
+function readOrientationPref(): 'landscape' | 'portrait' {
+  if (typeof window === 'undefined') return 'landscape';
+  try {
+    const v = window.localStorage.getItem(ORIENTATION_KEY);
+    if (v === 'portrait') return 'portrait';
+    if (v === 'landscape') return 'landscape';
+  } catch { /* localStorage unavailable */ }
+  const isMobileViewport = window.innerWidth <= 720;
+  const isUpright = window.innerHeight > window.innerWidth;
+  return isMobileViewport && isUpright ? 'portrait' : 'landscape';
+}
+
+export function persistOrientationPref(o: 'landscape' | 'portrait') {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(ORIENTATION_KEY, o); } catch {}
+}
+
 export const initialState: AppState = {
   view: 'gallery',
   canvasId: null,
@@ -202,6 +230,7 @@ export const initialState: AppState = {
   showChrome: true,
   showLabels: true,
   webSearch: readWebSearchPref(),
+  orientation: readOrientationPref(),
   lastDrillFrom: null,
   rootProgress: null,
 };

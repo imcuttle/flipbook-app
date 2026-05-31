@@ -8,6 +8,12 @@ import { uploadMemory, persistUpload } from './upload.js';
 
 export const canvasRouter = express.Router();
 
+// Whitelist the orientation field from request bodies. Only 'portrait' is
+// honoured; everything else (incl. missing) maps to landscape.
+function parseOrientation(v) {
+  return v === 'portrait' ? 'portrait' : 'landscape';
+}
+
 canvasRouter.get('/', async (req, res) => {
   // Pagination — `limit` opts into the paginated shape `{items,total,hasMore}`.
   // Without `limit` the response stays a flat array (back-compat).
@@ -31,11 +37,12 @@ canvasRouter.get('/', async (req, res) => {
 canvasRouter.post('/', async (req, res) => {
   const { topic, branches, webSearch } = req.body || {};
   const lang = normalizeLang(req.body?.lang);
+  const orientation = parseOrientation(req.body?.orientation);
   if (!topic || typeof topic !== 'string' || !topic.trim()) {
     return res.status(400).json({ error: 'topic_required' });
   }
   try {
-    const runtime = await createCanvas({ topic: topic.trim(), branches: Number(branches) || 5 });
+    const runtime = await createCanvas({ topic: topic.trim(), branches: Number(branches) || 5, orientation });
     // webSearch is an opt-out boolean; default true.
     const webSearchEnabled = webSearch !== false;
     const jobId = enqueueRootGeneration(runtime, { webSearchEnabled, lang });
@@ -67,9 +74,10 @@ canvasRouter.post('/upload', uploadMemory.single('image'), async (req, res) => {
     return res.status(400).json({ error: 'topic_or_image_required' });
   }
   const webSearchEnabled = req.body?.webSearch !== '0' && req.body?.webSearch !== false;
+  const orientation = parseOrientation(req.body?.orientation);
   try {
     const finalTopic = topic || '__pending__';
-    const runtime = await createCanvas({ topic: finalTopic });
+    const runtime = await createCanvas({ topic: finalTopic, orientation });
     let seedImagePath = null;
     if (file) {
       seedImagePath = await persistUpload(runtime.id, 'seed', file);
@@ -135,6 +143,7 @@ canvasRouter.get('/:id/manifest', async (req, res) => {
     topic: runtime.topic,
     slug: runtime.slug,
     branches: runtime.branches,
+    orientation: runtime.orientation ?? 'landscape',
     createdAt: runtime.createdAt,
   });
 });

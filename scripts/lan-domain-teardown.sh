@@ -54,6 +54,20 @@ else
   warn "未找到 ${DROPIN}，可能已撤销或域名不同。"
 fi
 
+# --- remove macOS resolver 委派 ---------------------------------------------
+# 仅当该 TLD 下不再有其它 dnsmasq drop-in 解析时才删，避免误伤同 TLD 的其它映射
+TLD="${DOMAIN##*.}"
+RESOLVER_FILE="/etc/resolver/${TLD}"
+if [[ -f "${RESOLVER_FILE}" ]]; then
+  if ls "${PREFIX}/etc/dnsmasq.d/"*.conf >/dev/null 2>&1 \
+     && grep -rlq "\.${TLD}/" "${PREFIX}/etc/dnsmasq.d/" 2>/dev/null; then
+    warn "保留 ${RESOLVER_FILE}（仍有其它 .${TLD} 解析在用）"
+  else
+    sudo rm -f "${RESOLVER_FILE}"
+    info "已删除 resolver 委派: ${RESOLVER_FILE}"
+  fi
+fi
+
 cat <<EOF
 
 ${GRN}已撤销 ${DOMAIN} 的本机映射。${RST}

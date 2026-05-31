@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { extractStyleSuffix, loadPrompts } from './prompts.js';
 import { writeFallbackSvg } from '../lib/svgFallback.js';
 import { paths } from '../store/paths.js';
-import { config } from '../config.js';
+import { config, parseSize } from '../config.js';
 import { log } from '../lib/log.js';
 import { resolveProviderChain } from './providers/index.js';
 import { repairImagePrompt } from './repairPrompt.js';
@@ -53,8 +53,9 @@ async function statBigEnough(p, minBytes = 512) {
  * pending click bubble. Phases: 'image.start', 'image.repair',
  * 'image.retry', 'image.done', 'image.fallback'.
  */
-export async function generateImage({ canvasId, hash, title, imagePrompt, seedImagePath = null, seedDescription = null, lang = 'zh', onEvent, onPhase }) {
+export async function generateImage({ canvasId, hash, title, imagePrompt, seedImagePath = null, seedDescription = null, lang = 'zh', size = config.imageSize, onEvent, onPhase }) {
   const userLang = normalizeLang(lang);
+  const { width: imgW, height: imgH } = parseSize(size);
   const targetPng = paths.imagePath(canvasId, hash, 'png');
   const dir = path.dirname(targetPng);
   await fs.mkdir(dir, { recursive: true });
@@ -121,7 +122,9 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, seedIm
         result = await provider.generate({
           imagePrompt: promptForProvider,
           outputDir: dir,
-          size: config.imageSize,
+          size,
+          width: imgW,
+          height: imgH,
           title,
           hash,
           seedImagePath: providerAttempt === 1 ? seedImagePath : null, // repair retry drops seed
@@ -205,7 +208,7 @@ export async function generateImage({ canvasId, hash, title, imagePrompt, seedIm
   // Belt-and-suspenders: if even the svg fallback couldn't write, synthesise one inline.
   emitPhase('image.fallback', 'All providers failed — using placeholder');
   const svgPath = paths.imagePath(canvasId, hash, 'svg');
-  await writeFallbackSvg(svgPath, { title, hash });
+  await writeFallbackSvg(svgPath, { title, hash, width: imgW, height: imgH });
   return {
     ext: 'svg',
     fallback: true,

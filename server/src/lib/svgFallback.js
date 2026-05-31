@@ -13,11 +13,22 @@ function escapeXml(s) {
     .replace(/'/g, '&apos;');
 }
 
-export function buildFallbackSvg({ title = 'Flipbook node', hash = '' } = {}) {
+export function buildFallbackSvg({ title = 'Flipbook node', hash = '', width = 1920, height = 1080 } = {}) {
   const t = escapeXml(title.slice(0, 60));
   const h = escapeXml(hash);
+  const w = Number(width) || 1920;
+  const ht = Number(height) || 1080;
+  const cx = Math.round(w / 2);
+  const cy = Math.round(ht / 2);
+  // The decorative isometric polygons were authored in a 1920×1080 space.
+  // Draw them inside a centred group scaled so the original 1920×1080
+  // artwork fits the requested viewport (object-fit: contain) — this keeps
+  // the look consistent across landscape and portrait without re-authoring.
+  const artScale = Math.min(w / 1920, ht / 1080);
+  const artTx = Math.round((w - 1920 * artScale) / 2);
+  const artTy = Math.round((ht - 1080 * artScale) / 2);
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${ht}" preserveAspectRatio="xMidYMid slice">
   <defs>
     <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
       <path d="M80 0H0V80" fill="none" stroke="rgba(0,0,0,0.04)" stroke-width="1"/>
@@ -27,13 +38,13 @@ export function buildFallbackSvg({ title = 'Flipbook node', hash = '' } = {}) {
       <stop offset="100%" stop-color="#ECE2D2"/>
     </linearGradient>
   </defs>
-  <rect width="1920" height="1080" fill="url(#iso)"/>
-  <rect width="1920" height="1080" fill="url(#grid)"/>
-  <g transform="translate(960,540)" opacity="0.18" font-family="Georgia, serif" text-anchor="middle">
+  <rect width="${w}" height="${ht}" fill="url(#iso)"/>
+  <rect width="${w}" height="${ht}" fill="url(#grid)"/>
+  <g transform="translate(${cx},${cy})" opacity="0.18" font-family="Georgia, serif" text-anchor="middle">
     <text font-size="64" fill="#1F1F1F">${t}</text>
     <text y="60" font-size="22" fill="#6F6457">placeholder · ${h}</text>
   </g>
-  <g stroke="#1F1F1F" stroke-width="1" fill="none" opacity="0.25">
+  <g transform="translate(${artTx},${artTy}) scale(${artScale})" stroke="#1F1F1F" stroke-width="1" fill="none" opacity="0.25">
     <polygon points="320,360 720,200 1120,360 720,520"/>
     <polygon points="800,640 1280,460 1680,640 1200,820"/>
     <polygon points="200,720 520,580 880,760 560,900"/>

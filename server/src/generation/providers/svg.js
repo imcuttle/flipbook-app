@@ -7,9 +7,9 @@ import { writeFallbackSvg } from '../../lib/svgFallback.js';
 export default {
   name: 'svg',
   enabled() { return true; },
-  async generate({ outputDir, title, hash }) {
+  async generate({ outputDir, title, hash, width, height }) {
     const file = path.join(outputDir, `${hash || 'fallback'}.svg`);
-    await writeFallbackSvg(file, { title, hash });
+    await writeFallbackSvg(file, { title, hash, width, height });
     return { ok: true, path: file };
   },
 };

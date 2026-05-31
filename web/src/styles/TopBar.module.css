@@ -133,7 +133,7 @@
   min-width: 0;
 }
 
-.crumbWrap { display: inline-flex; align-items: center; min-width: 0; }
+.crumbWrap { display: inline-flex; align-items: center; min-width: 0; position: relative; }
 
 .crumb {
   background: transparent;
@@ -164,6 +164,82 @@
   user-select: none;
   padding: 0 2px;
   font-size: 13px;
+}
+
+/* Deep-path collapse: the leaf crumb gets more room and never shrinks to an
+   unreadable sliver — it's the most important label in the chain. */
+.crumbLeaf {
+  max-width: min(60vw, 360px);
+  flex-shrink: 0;
+}
+
+/* "…" button standing in for the folded middle ancestors. */
+.crumbEllipsis {
+  background: transparent;
+  border: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 1px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.crumbEllipsis:hover { background: var(--bg); color: var(--ink); }
+
+/* Desktop popover listing the collapsed ancestors. */
+.crumbMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 180px;
+  max-width: 320px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 80;
+}
+
+.crumbMenuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crumbMenuItem:hover { background: var(--bg); color: var(--ink); }
+
+.crumbSheetList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.crumbSheetList .crumbMenuItem {
+  font-size: 15px;
+  padding: 12px 12px;
+  white-space: normal;
 }
 
 .newCrumbBtn {
@@ -249,6 +325,9 @@
   border: 1px solid var(--line);
   border-radius: 4px;
   flex-shrink: 0;
+  /* Keep "EN" on one line — without this the 2-char badge can wrap into
+     stacked letters inside the fixed 16px box on narrow mobile menus. */
+  white-space: nowrap;
 }
 
 /* Attached-image preview inside the address bar (gallery mode). */
@@ -384,6 +463,16 @@
   width: 14px;
   color: var(--accent);
   flex-shrink: 0;
+}
+
+/* Trailing state TEXT (e.g. "竖屏" / "Landscape") — unlike .moreItemState
+   (a fixed 14px slot for the ◆ marker icon), this holds a short word and
+   must not wrap into vertical characters. */
+.moreItemStateText {
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11.5px;
 }
 
 /* Info affordance on the Regenerate row — hover/focus reveals a small

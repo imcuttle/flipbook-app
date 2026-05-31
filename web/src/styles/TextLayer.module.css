@@ -51,3 +51,19 @@
   background: rgba(217, 99, 28, 0.22);
   color: transparent;
 }
+
+/* Mobile: disable OCR text selection entirely. The long-press gesture is
+   reserved for drilldown, and selectable spans steal that press (the OS
+   starts a text-selection / copy callout instead of our timer firing). We
+   also drop pointer-events so the press falls straight through to the
+   stage's handler. Desktop keeps selection — there's no long-press conflict
+   with a mouse, and copy is genuinely useful there. */
+@media (max-width: 720px) {
+  .span {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    pointer-events: none;
+    cursor: default;
+  }
+}

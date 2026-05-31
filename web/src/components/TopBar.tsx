@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { selectionFromClipboard, selectionFromFileList, type ImageSelection } from '../lib/imageUpload';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { BottomSheet } from './BottomSheet';
+import { BreadcrumbNav } from './BreadcrumbNav';
 
 type Props = {
   view: 'gallery' | 'canvas';
@@ -23,6 +24,7 @@ type Props = {
   onToggleLabels: () => void;
   onToggleWebSearch: () => void;
   onToggleComposeOnClick: () => void;
+  onToggleOrientation: () => void;
   onRegenerate?: () => void;
   // Attachment for new-canvas creation. Picked / pasted in the address bar.
   attachment: ImageSelection | null;
@@ -32,6 +34,7 @@ type Props = {
   showLabels: boolean;
   webSearch: boolean;
   composeOnClick: boolean;
+  orientation: 'landscape' | 'portrait';
   readOnly: boolean;
   busy: boolean;
 };
@@ -40,9 +43,9 @@ export function TopBar(props: Props) {
   const {
     view, topic, currentNode, draftTopic, onDraftTopicChange, onSubmitTopic,
     onBackToGallery, onJumpBreadcrumb, onShare, onToggleFullscreen, onToggleChrome,
-    onToggleLabels, onToggleWebSearch, onToggleComposeOnClick, onRegenerate,
+    onToggleLabels, onToggleWebSearch, onToggleComposeOnClick, onToggleOrientation, onRegenerate,
     attachment, onAttachmentChange,
-    fullscreen, showChrome, showLabels, webSearch, composeOnClick, readOnly, busy,
+    fullscreen, showChrome, showLabels, webSearch, composeOnClick, orientation, readOnly, busy,
   } = props;
 
   const [lang, setLang] = useLang();
@@ -145,26 +148,7 @@ export function TopBar(props: Props) {
         )}
 
         {view === 'canvas' && currentNode && (
-          <div className={styles.breadcrumb} aria-label="Path">
-            {path.map((p, i) => {
-              const isLast = i === path.length - 1;
-              const shown = displayTopic(p.title, lang);
-              return (
-                <span key={p.hash} className={styles.crumbWrap}>
-                  {i > 0 && <span className={styles.crumbSep}>›</span>}
-                  <button
-                    type="button"
-                    className={`${styles.crumb} ${isLast ? styles.crumbCurrent : ''}`}
-                    onClick={() => !isLast && onJumpBreadcrumb(p.hash)}
-                    disabled={isLast}
-                    title={shown}
-                  >
-                    {shown}
-                  </button>
-                </span>
-              );
-            })}
-          </div>
+          <BreadcrumbNav path={path} lang={lang} onJump={onJumpBreadcrumb} />
         )}
 
         {view === 'canvas' && !currentNode && topic && (
@@ -217,6 +201,10 @@ export function TopBar(props: Props) {
           onToggleWebSearch={!readOnly ? onToggleWebSearch : undefined}
           onToggleLabels={view === 'canvas' ? onToggleLabels : undefined}
           onToggleComposeOnClick={view === 'canvas' && !readOnly ? onToggleComposeOnClick : undefined}
+          // Orientation is fixed once a canvas exists, so only offer the
+          // toggle on the gallery (before creating the next canvas).
+          onToggleOrientation={view === 'gallery' && !readOnly ? onToggleOrientation : undefined}
+          orientation={orientation}
           onRegenerate={view === 'canvas' && !readOnly && currentNode ? onRegenerate : undefined}
           regenerateInfo={view === 'canvas' && currentNode ? {
             // Faithful to inputs: topic only if the user actually typed one
@@ -252,17 +240,19 @@ type MoreMenuProps = {
   onToggleWebSearch?: () => void;
   onToggleLabels?: () => void;
   onToggleComposeOnClick?: () => void;
+  onToggleOrientation?: () => void;
   onRegenerate?: () => void;
   regenerateInfo?: RegenerateInfo | null;
   webSearch: boolean;
   showLabels: boolean;
   composeOnClick: boolean;
+  orientation: 'landscape' | 'portrait';
 };
 
 function MoreMenu({
   lang, setLang,
-  onToggleWebSearch, onToggleLabels, onToggleComposeOnClick, onRegenerate, regenerateInfo,
-  webSearch, showLabels, composeOnClick,
+  onToggleWebSearch, onToggleLabels, onToggleComposeOnClick, onToggleOrientation, onRegenerate, regenerateInfo,
+  webSearch, showLabels, composeOnClick, orientation,
 }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -378,6 +368,20 @@ function MoreMenu({
           </span>
         </button>
       )}
+      {onToggleOrientation && (
+        <button
+          type="button"
+          className={styles.moreItem}
+          role="menuitem"
+          onClick={() => { onToggleOrientation(); setOpen(false); }}
+        >
+          <Icon name={orientation === 'portrait' ? 'orient-portrait' : 'orient-landscape'} size={14} />
+          <span className={styles.moreItemLabel}>{t('topbar.orientation', lang)}</span>
+          <span className={styles.moreItemStateText} aria-hidden>
+            {t(orientation === 'portrait' ? 'topbar.orientation.portrait' : 'topbar.orientation.landscape', lang)}
+          </span>
+        </button>
+      )}
       {onToggleWebSearch && (
         <button
           type="button"
@@ -417,6 +421,19 @@ function MoreMenu({
         <span className={styles.langInline}>{lang === 'zh' ? 'EN' : '中'}</span>
         <span className={styles.moreItemLabel}>{t('topbar.lang.zh', lang)}</span>
       </button>
+      <a
+        className={styles.moreItem}
+        role="menuitem"
+        href="https://github.com/imcuttle/flipbook-app"
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => setOpen(false)}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        <span className={styles.moreItemLabel}>GitHub</span>
+      </a>
     </>
   );
 
