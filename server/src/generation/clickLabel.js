@@ -35,10 +35,24 @@ export function validateClickLabel(raw, { click_xy }) {
       reason: String(raw.reason ?? '').slice(0, 240) || 'could not infer a label for this spot',
     };
   }
+  // Sanity-check the label is a short PLAIN-TEXT phrase, not markup. The
+  // model occasionally echoes HTML/CSS (e.g. the rendered card's own
+  // `<div style="width:240px;font-family:...">`) or other junk back as the
+  // "label"; rendering that verbatim in a hotspot card is the bug we're
+  // guarding against. Reject anything containing tag/markup characters,
+  // CSS-ish tokens, or that's implausibly long for a 1–6 word label.
+  const labelStr = String(labelRaw).trim();
+  const looksLikeMarkup = /[<>{}]|style\s*=|font-family|<\/?\w+|&[a-z]+;|;\s*[a-z-]+\s*:/i.test(labelStr);
+  if (looksLikeMarkup || labelStr.length > 60) {
+    return {
+      rejected: true,
+      reason: 'could not infer a clean label for this spot',
+    };
+  }
   const ax = Array.isArray(anchor_xy) ? [clamp01(anchor_xy[0]), clamp01(anchor_xy[1])] : [clamp01(click_xy[0] + 0.1), clamp01(click_xy[1] + 0.05)];
   const lx = Array.isArray(leader_xy) ? [clamp01(leader_xy[0]), clamp01(leader_xy[1])] : [clamp01(click_xy[0]), clamp01(click_xy[1])];
   return {
-    label: String(labelRaw).slice(0, 80),
+    label: labelStr.slice(0, 80),
     anchor_xy: ax,
     leader_xy: lx,
     next_prompt: String(next_prompt ?? '').slice(0, 400),

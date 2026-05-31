@@ -37,3 +37,24 @@ test('non-object output still throws (unparseable)', () => {
   assert.throws(() => validateClickLabel(null, CLICK));
   assert.throws(() => validateClickLabel('nope', CLICK));
 });
+
+test('rejects HTML/CSS leaked as a label (the <div style=...> bug)', () => {
+  // Regression: the label model occasionally echoes the rendered card's own
+  // markup back as the label, which then rendered verbatim in a hotspot
+  // card. Such junk must be rejected, not shown.
+  const html = `<div style="width:240px;font-family:'PingFang SC',sans-serif;font-size:13px;line`;
+  assert.equal(validateClickLabel({ label: html }, CLICK).rejected, true);
+  assert.equal(validateClickLabel({ label: 'foo<br>bar' }, CLICK).rejected, true);
+  assert.equal(validateClickLabel({ label: 'color: red; font-size: 12px' }, CLICK).rejected, true);
+});
+
+test('rejects an absurdly long label', () => {
+  const long = '很长的标签'.repeat(20); // 100 chars
+  assert.equal(validateClickLabel({ label: long }, CLICK).rejected, true);
+});
+
+test('accepts a clean multi-word label with punctuation', () => {
+  const out = validateClickLabel({ label: '混凝土基座 (C30)' }, CLICK);
+  assert.equal(out.rejected, undefined);
+  assert.equal(out.label, '混凝土基座 (C30)');
+});

@@ -511,13 +511,17 @@ async function buildAndRegisterNode({
           return;
         }
         const map = {
-          'image.start':    { key: 'phase.image.gen',     fb: message },
+          'image.start':    { key: 'phase.image.gen',     fb: 'Generating illustration…' },
           'image.repair':   { key: 'phase.image.repair',  fb: 'Image model declined — refining prompt…' },
           'image.retry':    { key: 'phase.image.retry',   fb: 'Retrying with refined prompt…' },
           'image.done':     { key: 'phase.image.done',    fb: 'Image ready' },
           'image.fallback': { key: 'phase.image.fallback', fb: 'Image generation failed — using placeholder' },
         };
-        const m = map[phase] ?? { key: 'phase.image.gen', fb: message };
+        // Only ever forward our OWN curated phase strings to the bubble.
+        // Never pass the raw `message` from an unknown phase: the image
+        // provider's text can contain model-echoed HTML/CSS/junk which
+        // would render verbatim in the hotspot card / progress bubble.
+        const m = map[phase] ?? { key: 'phase.image.gen', fb: 'Generating illustration…' };
         emitPhaseMessage(canvas, jobId, m.key, m.fb);
       },
     });
