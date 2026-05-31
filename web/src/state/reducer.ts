@@ -459,22 +459,23 @@ function applySse(state: AppState, evt: SseEvent): AppState {
       // seed_refused_no_fallback: the uploaded image was declined AND there
       // was no topic / scene description to fall back on, so generation was
       // aborted. The server already localised a clear message — show it
-      // verbatim at warn level with no "phase:" prefix.
-      if (evt.code === 'seed_refused_no_fallback') {
-        const next: Toast = { id, level: 'warn', message: evt.message };
-        let s: AppState = { ...state, toasts: [...state.toasts, next].slice(-5) };
-        s = dropPending(s, evt.jobId);
-        return { ...s, status: { phase: 'idle' }, rootProgress: null };
-      }
-      const msg = isRefusal ? evt.message : `${evt.phase}: ${evt.message}`;
+      // verbatim at warn level with no "phase:" prefix. It must still flow
+      // through the shared tail below (drop pending, reset status, and —
+      // critically — return to the gallery, since the server deleted the
+      // empty canvas).
+      const isAbortedNoFallback = evt.code === 'seed_refused_no_fallback';
+      const msg = (isRefusal || isAbortedNoFallback) ? evt.message : `${evt.phase}: ${evt.message}`;
       const next: Toast = isRefusal
         ? {
             id,
             level: 'warn',
             message: msg,
             messageKey: 'toast.planner.refusal',
+            sticky: true,
           }
-        : { id, level: 'error', message: msg };
+        : isAbortedNoFallback
+          ? { id, level: 'warn', message: msg, sticky: true }
+          : { id, level: 'error', message: msg };
       let s: AppState = { ...state, toasts: [...state.toasts, next].slice(-5) };
       s = dropPending(s, evt.jobId);
       // A hard generation failure ends the in-flight job. Reset the status

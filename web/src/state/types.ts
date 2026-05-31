@@ -103,6 +103,10 @@ export type Toast = {
   // language the server/model happened to return.
   messageKey?: string;
   messageVars?: Record<string, string | number>;
+  // When true the toast never auto-dismisses — it stays until the user
+  // closes it. Used for failures / aborts the user should consciously
+  // acknowledge (not just transient warnings about a degraded fallback).
+  sticky?: boolean;
 };
 
 export type GalleryEntry = {

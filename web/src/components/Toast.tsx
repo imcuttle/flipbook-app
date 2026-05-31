@@ -20,8 +20,8 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Errors persist until the user closes them.
-    if (toast.level === 'error') return;
+    // Errors and explicitly-sticky toasts persist until the user closes them.
+    if (toast.level === 'error' || toast.sticky) return;
     if (paused) {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
