@@ -12,5 +12,12 @@
     "cover": "images/5ae7cd8156cc.png",
     "nodeCount": 22,
     "orientation": "portrait"
+  },
+  {
+    "id": "yFwvazGC_6oa",
+    "topic": "LLM发展史",
+    "cover": "images/d7c2bc6c0848.png",
+    "nodeCount": 11,
+    "orientation": "landscape"
   }
 ]
