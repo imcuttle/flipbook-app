@@ -14,6 +14,7 @@ import { createCanvas, clickAt, getNode, getTree, createShareLink, resolveShareL
 import { useLang, t, displayTopic } from './lib/i18n';
 import { revokeSelection, type ImageSelection } from './lib/imageUpload';
 import { copyToClipboard } from './lib/clipboard';
+import { IS_EXPORT, readExportPayload } from './lib/exportProfile';
 
 function readUrlState() {
   const url = new URL(window.location.href);
@@ -79,6 +80,31 @@ export default function App() {
   // Boot: parse URL → restore state. Precedence: legacy ?s=<token> still works
   // for old links; otherwise ?c=<id>&n=<hash>&mode=preview drives the view.
   useEffect(() => {
+    if (IS_EXPORT) {
+      const payload = readExportPayload();
+      if (!payload || !payload.root) {
+        bootedRef.current = true;
+        return;
+      }
+      dispatch({ type: 'set_share_mode', canvasId: 'export', topic: payload.topic, token: 'export' });
+      dispatch({ type: 'set_tree', tree: { ...payload.tree, topic: payload.topic, orientation: payload.orientation } as any });
+      // 深链接：#hash 优先，否则 root
+      const fromHash = (window.location.hash || '').replace(/^#/, '');
+      const targetHash = (fromHash && payload.nodes[fromHash]) ? fromHash : payload.root;
+      const node = payload.nodes[targetHash];
+      if (node) {
+        // 先注入祖先（面包屑），再注入目标节点
+        for (const p of (node.path ?? []).slice(0, -1)) {
+          const anc = payload.nodes[p.hash];
+          if (anc) dispatch({ type: 'sse', evt: { type: 'node_ready', canvasId: 'export', jobId: 'export', hash: anc.hash, node: anc } });
+        }
+        dispatch({ type: 'sse', evt: { type: 'node_ready', canvasId: 'export', jobId: 'export', hash: node.hash, node } });
+        dispatch({ type: 'navigate', hash: node.hash });
+      }
+      bootedRef.current = true;
+      return;
+    }
+
     const u = readUrlState();
     const isPreview = u.mode === 'preview';
 
@@ -150,6 +176,7 @@ export default function App() {
   //       currentHash=null transiently and we DO want to write ?c there.
   //   (3) Gallery view: clear all canvas params.
   useEffect(() => {
+    if (IS_EXPORT) return; // 导出形态用 #hash 深链接，不改写查询参数
     if (!bootedRef.current) return;
     if (state.view === 'gallery') {
       writeUrlState({ canvasId: null, nodeHash: null, preview: false });
