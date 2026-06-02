@@ -1,6 +1,7 @@
 node_modules/
 server/data/
 web/dist/
+web/dist-export/
 docs-pages/
 .DS_Store
 *.log
