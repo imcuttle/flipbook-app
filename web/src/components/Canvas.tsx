@@ -15,6 +15,7 @@ import { clamp01, pct } from '../lib/geometry';
 import { layOutHotspots } from '../lib/layout';
 import { useLang, t } from '../lib/i18n';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { IS_EXPORT } from '../lib/exportProfile';
 
 const MAX_PARALLEL_PER_NODE = 4;
 const LONG_PRESS_MS = 1000;
@@ -634,7 +635,7 @@ export function Canvas({ canvasId, node, tree, imageLoading, pendingClicks, read
             lock icon to distinguish it from the eye-shaped chrome toggle.
             The fixed --readonly-offset (set in CSS) handles the inset on
             both desktop and small screens — only top/right are inlined. */}
-        {readOnly && (
+        {readOnly && !IS_EXPORT && (
           <div
             className={styles.readOnlyBadge}
             style={imageRect ? {

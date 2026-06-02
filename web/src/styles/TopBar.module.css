@@ -301,6 +301,16 @@
 
 .miniBtn:hover { background: var(--bg); }
 
+/* "On" state for toggle miniBtns (e.g. export-mode labels switch): tint the
+   button so the active state reads at a glance, matching the More menu's
+   moreItemOn affordance. */
+.miniBtnOn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
+}
+.miniBtnOn:hover { background: var(--accent); }
+
 .compact .miniBtn { width: 28px; height: 28px; font-size: 13px; }
 
 /* Language toggle is text-only ("EN" / "中"). Size the inner span to the

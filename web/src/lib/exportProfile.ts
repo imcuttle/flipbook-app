@@ -17,6 +17,8 @@ export const exportChrome = {
   showShare: !IS_EXPORT,
   showBackToGallery: !IS_EXPORT,
   showMoreMenu: !IS_EXPORT,
+  // 导出版把「热点标签显隐」开关作为顶栏直出按钮（在线版收在 More 菜单里）。
+  labelsInTopBar: IS_EXPORT,
   // 页脚版权条仅在导出形态显示。
   showFooter: IS_EXPORT,
 };

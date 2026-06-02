@@ -88,18 +88,17 @@ export default function App() {
       }
       dispatch({ type: 'set_share_mode', canvasId: 'export', topic: payload.topic, token: 'export' });
       dispatch({ type: 'set_tree', tree: { ...payload.tree, topic: payload.topic, orientation: payload.orientation } as any });
+      // 注入全部节点：导出产物离线，没有 /api/canvas/.../nodes/<hash> 可拉，
+      // 所以一次性把 payload 里的每个节点都灌进 state.nodes，热点导航 / 面包屑
+      // 跳转才不会回退到 getNode（否则会报 "Load failed: getNode failed: 404"）。
+      for (const [hash, node] of Object.entries(payload.nodes)) {
+        dispatch({ type: 'sse', evt: { type: 'node_ready', canvasId: 'export', jobId: 'export', hash, node: node as any } });
+      }
       // 深链接：#hash 优先，否则 root
       const fromHash = (window.location.hash || '').replace(/^#/, '');
       const targetHash = (fromHash && payload.nodes[fromHash]) ? fromHash : payload.root;
-      const node = payload.nodes[targetHash];
-      if (node) {
-        // 先注入祖先（面包屑），再注入目标节点
-        for (const p of (node.path ?? []).slice(0, -1)) {
-          const anc = payload.nodes[p.hash];
-          if (anc) dispatch({ type: 'sse', evt: { type: 'node_ready', canvasId: 'export', jobId: 'export', hash: anc.hash, node: anc } });
-        }
-        dispatch({ type: 'sse', evt: { type: 'node_ready', canvasId: 'export', jobId: 'export', hash: node.hash, node } });
-        dispatch({ type: 'navigate', hash: node.hash });
+      if (payload.nodes[targetHash]) {
+        dispatch({ type: 'navigate', hash: targetHash });
       }
       bootedRef.current = true;
       return;
@@ -355,7 +354,7 @@ export default function App() {
       const nh = hot.next_hash;
       if (state.nodes[nh]) {
         dispatch({ type: 'navigate', hash: nh });
-      } else {
+      } else if (!IS_EXPORT) {
         getNode(state.canvasId, nh)
           .then((child) => {
             dispatch({
@@ -495,7 +494,7 @@ export default function App() {
   const onJumpBreadcrumb = useCallback((hash: string) => {
     if (state.nodes[hash]) {
       dispatch({ type: 'navigate', hash });
-    } else if (state.canvasId) {
+    } else if (state.canvasId && !IS_EXPORT) {
       // Fetch first, then dispatch BOTH node_ready (to register the node in
       // state.nodes) AND navigate (to switch to it). node_ready alone would
       // only auto-navigate when node.parent === state.currentHash, which is

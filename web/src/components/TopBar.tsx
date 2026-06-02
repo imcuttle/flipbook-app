@@ -200,6 +200,16 @@ export function TopBar(props: Props) {
             aria-label="Toggle chrome"
           ><Icon name={showChrome ? 'eye' : 'eye-off'} size={14} /></button>
         )}
+        {exportChrome.labelsInTopBar && view === 'canvas' && (
+          <button
+            type="button"
+            className={`${styles.miniBtn} ${showLabels ? styles.miniBtnOn : ''}`}
+            onClick={onToggleLabels}
+            title={showLabels ? t('topbar.labels.hide', lang) : t('topbar.labels.show', lang)}
+            aria-label={showLabels ? t('topbar.labels.hide', lang) : t('topbar.labels.show', lang)}
+            aria-pressed={showLabels}
+          ><Icon name={showLabels ? 'tag-on' : 'tag-off'} size={14} /></button>
+        )}
         {exportChrome.githubInTopBar && (
           <a
             className={styles.miniBtn}
