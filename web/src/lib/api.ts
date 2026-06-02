@@ -1,4 +1,5 @@
 import type { Node, Tree, GalleryEntry } from '../state/types';
+import { IS_EXPORT } from './exportProfile';
 
 const API = '/api';
 
@@ -128,6 +129,9 @@ export async function getTree(canvasId: string): Promise<Tree> {
 }
 
 export function imageUrl(canvasId: string, imageRel: string): string {
+  // 导出形态：图片是 zip 内相对路径（images/<hash>.png），离线直引，
+  // 不走 /api。canvasId 在此分支无用。
+  if (IS_EXPORT) return imageRel.replace(/^\//, '');
   if (imageRel.startsWith('/api/')) return imageRel;
   if (imageRel.startsWith('http')) return imageRel;
   return `${API}/canvas/${canvasId}/${imageRel.replace(/^\//, '')}`;
