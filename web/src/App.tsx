@@ -14,7 +14,7 @@ import { createCanvas, clickAt, getNode, getTree, createShareLink, resolveShareL
 import { useLang, t, displayTopic } from './lib/i18n';
 import { revokeSelection, type ImageSelection } from './lib/imageUpload';
 import { copyToClipboard } from './lib/clipboard';
-import { IS_EXPORT, readExportPayload } from './lib/exportProfile';
+import { IS_EXPORT, readExportPayload, exportChrome } from './lib/exportProfile';
 
 function readUrlState() {
   const url = new URL(window.location.href);
@@ -630,6 +630,12 @@ export default function App() {
   }, [state.orientation]);
 
   const currentNode = state.currentHash ? state.nodes[state.currentHash] : null;
+
+  // 导出形态：标签页标题跟随当前节点标题（在线版由文档默认标题处理）。
+  useEffect(() => {
+    if (!IS_EXPORT) return;
+    document.title = currentNode?.title || state.topic || 'Flipbook';
+  }, [currentNode, state.topic]);
   // `busy` covers two distinct in-flight states:
   //   1. `submitting` — local POST hasn't returned yet (the multipart
   //      upload is still streaming over the wire).
@@ -798,6 +804,16 @@ export default function App() {
             />
           )}
         </div>
+        {exportChrome.showFooter && (
+          <div className={styles.exportFooter}>
+            <a
+              className={styles.exportFooterLink}
+              href="https://github.com/imcuttle/flipbook-app"
+              target="_blank"
+              rel="noopener noreferrer"
+            >Copyright Flipbook Canvas</a>
+          </div>
+        )}
       </div>
 
       <ToastStack

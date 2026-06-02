@@ -94,3 +94,15 @@
   }
   .canvas { padding: 12px 12px 16px; gap: 8px; min-height: 0; }
 }
+
+.exportFooter {
+  text-align: center;
+  padding: 16px 0 24px;
+  flex: 0 0 auto;
+}
+.exportFooterLink {
+  color: #B4A793;
+  font-size: 11px;
+  text-decoration: none;
+}
+.exportFooterLink:hover { text-decoration: underline; }
