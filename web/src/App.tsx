@@ -251,6 +251,7 @@ export default function App() {
   };
 
   const onSubmitTopic = useCallback(async () => {
+    if (IS_EXPORT) return;
     const topic = draftTopic.trim();
     // Either a topic, an attached image, or both — server will accept any.
     if (!topic && !topicAttachment) return;
@@ -285,6 +286,7 @@ export default function App() {
   }, [draftTopic, state.readOnly, state.webSearch, state.orientation, topicAttachment, submitting, lang]);
 
   const onImageClick = useCallback(async (xy: [number, number]) => {
+    if (IS_EXPORT) return;
     if (state.readOnly) return;
     if (!state.canvasId || !state.currentHash) return;
     // Compose-on-click ON: open the floating panel and let the user add
@@ -313,6 +315,7 @@ export default function App() {
     label: string,
     image: ImageSelection | null,
   ) => {
+    if (IS_EXPORT) return;
     if (state.readOnly || !state.canvasId || !state.currentHash) return;
     try {
       const r = await clickAt(state.canvasId, state.currentHash, xy[0], xy[1], {
@@ -380,6 +383,7 @@ export default function App() {
   const [regenTarget, setRegenTarget] = useState<{ hash: string; title: string; descendantCount: number } | null>(null);
 
   const onHotspotDelete = useCallback((index: number) => {
+    if (IS_EXPORT) return;
     if (state.readOnly) return;
     if (!state.currentHash || !state.canvasId) return;
     const node = state.nodes[state.currentHash];
@@ -421,6 +425,7 @@ export default function App() {
   }, [state.canvasId, state.currentHash, state.nodes, state.readOnly, state.tree, lang]);
 
   const confirmDelete = useCallback(async () => {
+    if (IS_EXPORT) return;
     if (!deleteTarget || !state.canvasId) {
       setDeleteTarget(null);
       return;
@@ -467,6 +472,7 @@ export default function App() {
   }, [state.canvasId, state.currentHash, state.nodes, state.readOnly, state.tree]);
 
   const confirmRegenerate = useCallback(async () => {
+    if (IS_EXPORT) return;
     if (!regenTarget || !state.canvasId) {
       setRegenTarget(null);
       return;
@@ -520,6 +526,7 @@ export default function App() {
   }, [state.canvasId]);
 
   const onShare = useCallback(async () => {
+    if (IS_EXPORT) return;
     if (!state.canvasId) return;
     // The new model: a share link is just the canvas URL with mode=preview.
     // No server token is needed — the canvasId itself is the access proof
@@ -553,6 +560,7 @@ export default function App() {
   // Export the whole flipbook as a self-contained static-site zip (openable
   // offline via file://). Available in both authoring and read-only preview.
   const onExportPreview = useCallback(async () => {
+    if (IS_EXPORT) return;
     if (!state.canvasId) return;
     dispatch({ type: 'add_toast', toast: { level: 'info', message: t('topbar.export.busy', lang), tag: 'export', sticky: true } });
     try {
@@ -600,6 +608,7 @@ export default function App() {
     patch: { label?: string; anchor_xy?: [number, number]; leader_xy?: [number, number] },
     prev: { label?: string; anchor_xy?: [number, number]; leader_xy?: [number, number] },
   ) => {
+    if (IS_EXPORT) return;
     if (state.readOnly) return;
     const canvasId = state.canvasId;
     const hash = state.currentHash;
@@ -725,7 +734,7 @@ export default function App() {
           busy={busy}
         />
         <div className={styles.canvas}>
-          {state.view === 'gallery' && (
+          {!IS_EXPORT && state.view === 'gallery' && (
             <Gallery refreshKey={galleryRefreshKey} onOpen={onOpenFromGallery} />
           )}
 
@@ -772,7 +781,7 @@ export default function App() {
               onJumpToHash={onJumpBreadcrumb}
               onImageRectChange={setCanvasImageRect}
               orientation={state.orientation}
-              overlay={clickComposer && (() => {
+              overlay={!IS_EXPORT && clickComposer && (() => {
                 // image-relative xy → stage-relative for placement.
                 const ir = canvasImageRect ?? { left: 0, top: 0, width: 100, height: 100 };
                 const sx = (ir.left + clickComposer.xy[0] * ir.width) / 100;
