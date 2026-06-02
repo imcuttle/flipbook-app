@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
 import type { SseEvent } from '../state/types';
+import { IS_EXPORT } from '../lib/exportProfile';
 
 export function useCanvasSSE(canvasId: string | null, onEvent: (evt: SseEvent) => void) {
   const handlerRef = useRef(onEvent);
   handlerRef.current = onEvent;
 
   useEffect(() => {
+    if (IS_EXPORT) return; // 导出形态无 SSE：EventSource 相关代码为死分支，被 tree-shake
     if (!canvasId) return;
     let stopped = false;
     let es: EventSource | null = null;
