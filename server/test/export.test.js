@@ -5,6 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import zlib from 'node:zlib';
+import { fileURLToPath } from 'node:url';
 import { buildZip } from '../src/lib/zip.js';
 
 // Point the server's data dir at a temp location BEFORE importing any
@@ -14,6 +15,24 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flipbook-export-'));
 process.env.DATA_DIR = TMP;
 const { paths } = await import('../src/store/paths.js');
 const { buildCanvasExport } = await import('../src/export/buildExport.js');
+
+// buildExport 现在从 web/dist-export 读取 Vite 导出产物（index.html +
+// viewer.js + 内联 CSS + favicon 等）。单测不跑真实 Vite 构建：伪造一个最小
+// 产物目录（buildCanvasSite 只是把目录下文件原样打包）。
+const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const DIST_EXPORT = path.join(APP_ROOT, 'web', 'dist-export');
+const STUB_FILES = {
+  'index.html': '<!doctype html><html><head><title>Flipbook</title></head><body><div id="root"></div><script src="./data.js"></script><script type="module" src="./viewer.js"></script></body></html>',
+  'viewer.js': '/* stub viewer */',
+};
+let _createdDistExport = false;
+if (!fs.existsSync(path.join(DIST_EXPORT, 'index.html'))) {
+  fs.mkdirSync(DIST_EXPORT, { recursive: true });
+  _createdDistExport = true;
+  for (const [name, content] of Object.entries(STUB_FILES)) {
+    fs.writeFileSync(path.join(DIST_EXPORT, name), content);
+  }
+}
 
 // Parse a ZIP buffer: walk local headers to extract { name -> bytes }. Just
 // enough of the format to assert our writer produces a readable archive.
@@ -116,7 +135,7 @@ test('buildCanvasExport bundles a static site for a canvas', async () => {
   const { buffer, filename } = await buildCanvasExport(id, { lang: 'zh' });
   assert.match(filename, /\.zip$/);
   const { entries } = readZip(buffer);
-  for (const f of ['index.html', 'viewer.js', 'viewer.css', 'data.js']) {
+  for (const f of ['index.html', 'viewer.js', 'data.js']) {
     assert.ok(entries[f], `missing ${f}`);
   }
   assert.ok(entries[`images/${rootHash}.png`], 'root image missing');
@@ -130,9 +149,13 @@ test('buildCanvasExport bundles a static site for a canvas', async () => {
   assert.equal(payload.nodes[rootHash].text_layer.length, 1);
 
   const html = entries['index.html'].toString('utf8');
-  assert.match(html, /src="data\.js"/);
-  assert.match(html, /src="viewer\.js"/);
-  assert.match(html, /href="viewer\.css"/);
+  assert.match(html, /src="\.?\/?data\.js"/);
+  assert.match(html, /src="\.?\/?viewer\.js"/);
+  // 产物必须来自 web/dist-export（Vite 构建），而非旧的手写 template/。
+  // 仅当本测试创建了 stub 目录时才断言其内容（CI 上若已有真实构建则跳过）。
+  if (_createdDistExport) {
+    assert.equal(entries['viewer.js'].toString('utf8'), '/* stub viewer */');
+  }
 });
 
 test('buildCanvasExport skips still-generating imageless skeletons', async () => {
@@ -158,4 +181,7 @@ test('buildCanvasExport skips still-generating imageless skeletons', async () =>
   assert.ok(!payload.tree.nodes[genHash], 'generating skeleton dropped from tree too');
 });
 
-test.after(async () => { await fsp.rm(TMP, { recursive: true, force: true }); });
+test.after(async () => {
+  await fsp.rm(TMP, { recursive: true, force: true });
+  if (_createdDistExport) await fsp.rm(DIST_EXPORT, { recursive: true, force: true });
+});

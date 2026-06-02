@@ -12,7 +12,28 @@ import { buildZip } from '../lib/zip.js';
 import { log } from '../lib/log.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATE_DIR = path.join(__dirname, 'template');
+// Vite 导出构建产物目录：server/src/export → 仓库根（app）→ web/dist-export。
+// 由 `npm run build:export` 生成（IIFE + 相对路径，离线 file:// 可用）。
+const DIST_EXPORT_DIR = path.join(__dirname, '..', '..', '..', 'web', 'dist-export');
+
+// 递归收集 dist-export 下的所有文件，返回相对 entry 名（用 / 分隔）。
+// IIFE 构建会把 CSS 内联进 viewer.js，并可能产出 favicon.svg 等额外资源，
+// 所以这里整目录打包，而非硬编码三个文件。data.js 由本模块运行时生成，
+// 不在该目录内（已被注入到 index.html 的 <script> 引用）。
+async function collectViteAssets() {
+  const entries = [];
+  async function walk(absDir, relPrefix) {
+    const dirents = await fs.readdir(absDir, { withFileTypes: true });
+    for (const d of dirents) {
+      const abs = path.join(absDir, d.name);
+      const rel = relPrefix ? `${relPrefix}/${d.name}` : d.name;
+      if (d.isDirectory()) await walk(abs, rel);
+      else entries.push({ name: rel, data: await fs.readFile(abs) });
+    }
+  }
+  await walk(DIST_EXPORT_DIR, '');
+  return entries;
+}
 
 // Strip the node JSON down to only the fields the static viewer needs, and
 // rewrite the image path to a relative in-zip path (images/<hash>.png). We
@@ -146,20 +167,19 @@ export async function buildCanvasSite(canvasId, opts = {}) {
     tree: { nodes: treeNodes, root: rootHash },
   };
 
-  // Read template assets.
-  const [html, css, js] = await Promise.all([
-    fs.readFile(path.join(TEMPLATE_DIR, 'index.html'), 'utf8'),
-    fs.readFile(path.join(TEMPLATE_DIR, 'viewer.css'), 'utf8'),
-    fs.readFile(path.join(TEMPLATE_DIR, 'viewer.js'), 'utf8'),
-  ]);
+  // 读取 Vite 导出构建产物（web/dist-export）。需先运行 `npm run build:export`。
+  if (!fsSync.existsSync(path.join(DIST_EXPORT_DIR, 'index.html'))) {
+    throw new Error('export build missing — run `npm run build:export` first (expected web/dist-export/index.html)');
+  }
+  const viteAssets = await collectViteAssets();
 
   const title = tree.topic || 'Flipbook';
-  const indexHtml = html.replace('__TITLE__', title.replace(/</g, '&lt;'));
+  // 标题由 export 应用运行时通过 document.title 设置（跟随当前节点）。
   const dataJs = 'window.__FLIPBOOK__ = ' + JSON.stringify(payload) + ';\n';
 
-  entries.push({ name: 'index.html', data: indexHtml });
-  entries.push({ name: 'viewer.css', data: css });
-  entries.push({ name: 'viewer.js', data: js });
+  // 先放 Vite 产物（index.html / viewer.js / 内联样式 / favicon 等），
+  // 再放运行时生成的 data.js。images/ 条目此前已 push 进 entries。
+  for (const a of viteAssets) entries.push(a);
   entries.push({ name: 'data.js', data: dataJs });
 
   const cover = rootHash && exportNodes[rootHash] ? exportNodes[rootHash].image : null;
