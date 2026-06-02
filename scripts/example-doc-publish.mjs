@@ -138,6 +138,12 @@ async function main() {
   const { buildCanvasSite } = await import(path.join(APP_ROOT, 'server', 'src', 'export', 'buildExport.js'));
   const { isSafeId } = await import(path.join(APP_ROOT, 'server', 'src', 'store', 'paths.js'));
 
+  const distExportIndex = path.join(APP_ROOT, 'web', 'dist-export', 'index.html');
+  if (!fsSync.existsSync(distExportIndex)) {
+    console.error('[err] web/dist-export not found — run `npm run build:export` first.');
+    process.exit(1);
+  }
+
   // Publish dir: default to a gitignored staging dir under the app.
   const publishDir = path.resolve(args.dir || path.join(APP_ROOT, 'docs-pages'));
   await fs.mkdir(publishDir, { recursive: true });

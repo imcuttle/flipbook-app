@@ -53,6 +53,12 @@ async function main() {
   const { isSafeId } = await import(path.join(APP_ROOT, 'server', 'src', 'store', 'paths.js'));
   if (!isSafeId(args.id)) { console.error(`Invalid canvasId: ${args.id}`); process.exit(1); }
 
+  const distExportIndex = path.join(APP_ROOT, 'web', 'dist-export', 'index.html');
+  if (!fs.existsSync(distExportIndex)) {
+    console.error('[err] web/dist-export not found — run `npm run build:export` first.');
+    process.exit(1);
+  }
+
   let site;
   try {
     site = await buildCanvasSite(args.id, { lang: args.lang });
