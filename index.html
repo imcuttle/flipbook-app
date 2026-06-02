@@ -18,7 +18,12 @@
     border-radius:14px; overflow:hidden; text-decoration:none; color:inherit;
     box-shadow:0 2px 10px rgba(0,0,0,0.04); transition:transform 140ms, box-shadow 140ms; }
   .card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,0.10); }
-  .thumb { width:100%; aspect-ratio:16/9; object-fit:cover; display:block; background:var(--bg); }
+  /* Progressive cover: blurred bg placeholder (tiny) + medium img faded in. */
+  .thumb { position:relative; width:100%; aspect-ratio:16/9; display:block; background:var(--bg);
+    background-size:cover; background-position:center; overflow:hidden; }
+  .thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    opacity:0; transition:opacity 420ms ease; }
+  .thumb img.loaded { opacity:1; }
   .thumbEmpty { display:flex; align-items:center; justify-content:center; color:var(--muted); }
   .meta { padding:12px 14px 14px; }
   .cardTitle { font-size:16px; font-weight:600; line-height:1.35;
@@ -37,42 +42,60 @@
     </header>
     <div class="grid">
       <a class="card" href="V1dgPXc_vsfX/">
-        <img class="thumb" src="V1dgPXc_vsfX/images/d07afbabc3ed.png" alt="" loading="lazy" />
+        <div class="thumb" style="background-image:url('V1dgPXc_vsfX/images/d07afbabc3ed.blur.jpg')">
+          <img src="V1dgPXc_vsfX/images/d07afbabc3ed.medium.jpg" alt="" loading="lazy" decoding="async"
+               onload="this.classList.add('loaded')" />
+        </div>
         <div class="meta">
           <div class="cardTitle">2026国产游戏与电竞产业全景</div>
           <div class="cardSub">11 pages</div>
         </div>
       </a>
       <a class="card" href="mwUQT5xgSGmE/">
-        <img class="thumb" src="mwUQT5xgSGmE/images/fc6b7433210a.png" alt="" loading="lazy" />
+        <div class="thumb" style="background-image:url('mwUQT5xgSGmE/images/fc6b7433210a.blur.jpg')">
+          <img src="mwUQT5xgSGmE/images/fc6b7433210a.medium.jpg" alt="" loading="lazy" decoding="async"
+               onload="this.classList.add('loaded')" />
+        </div>
         <div class="meta">
           <div class="cardTitle">2026开源大模型与算力浪潮全景图</div>
           <div class="cardSub">13 pages</div>
         </div>
       </a>
       <a class="card" href="3CxOnV76roLd/">
-        <img class="thumb" src="3CxOnV76roLd/images/4d03342e3918.png" alt="" loading="lazy" />
+        <div class="thumb" style="background-image:url('3CxOnV76roLd/images/4d03342e3918.blur.jpg')">
+          <img src="3CxOnV76roLd/images/4d03342e3918.medium.jpg" alt="" loading="lazy" decoding="async"
+               onload="this.classList.add('loaded')" />
+        </div>
         <div class="meta">
           <div class="cardTitle">2026世界杯：美加墨三国联合举办</div>
           <div class="cardSub">62 pages</div>
         </div>
       </a>
       <a class="card" href="V3k0-XAHNftz/">
-        <img class="thumb" src="V3k0-XAHNftz/images/a83f7050a395.png" alt="" loading="lazy" />
+        <div class="thumb" style="background-image:url('V3k0-XAHNftz/images/a83f7050a395.blur.jpg')">
+          <img src="V3k0-XAHNftz/images/a83f7050a395.medium.jpg" alt="" loading="lazy" decoding="async"
+               onload="this.classList.add('loaded')" />
+        </div>
         <div class="meta">
           <div class="cardTitle">2026中国电影年度票房榜：飞驰人生3领跑的春节档奇迹</div>
           <div class="cardSub">11 pages</div>
         </div>
       </a>
       <a class="card" href="DXS3sRUSKh7L/">
-        <img class="thumb" src="DXS3sRUSKh7L/images/5ae7cd8156cc.png" alt="" loading="lazy" />
+        <div class="thumb" style="background-image:url('DXS3sRUSKh7L/images/5ae7cd8156cc.blur.jpg')">
+          <img src="DXS3sRUSKh7L/images/5ae7cd8156cc.medium.jpg" alt="" loading="lazy" decoding="async"
+               onload="this.classList.add('loaded')" />
+        </div>
         <div class="meta">
           <div class="cardTitle">家庭:亲缘结构与日常生活的基本单位</div>
           <div class="cardSub">22 pages</div>
         </div>
       </a>
       <a class="card" href="yFwvazGC_6oa/">
-        <img class="thumb" src="yFwvazGC_6oa/images/d7c2bc6c0848.png" alt="" loading="lazy" />
+        <div class="thumb" style="background-image:url('yFwvazGC_6oa/images/d7c2bc6c0848.blur.jpg')">
+          <img src="yFwvazGC_6oa/images/d7c2bc6c0848.medium.jpg" alt="" loading="lazy" decoding="async"
+               onload="this.classList.add('loaded')" />
+        </div>
         <div class="meta">
           <div class="cardTitle">LLM发展史</div>
           <div class="cardSub">11 pages</div>
