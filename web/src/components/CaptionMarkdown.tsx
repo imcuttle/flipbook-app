@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import styles from '../styles/Caption.module.css';
 import { useLang, t } from '../lib/i18n';
+import { IS_EXPORT } from '../lib/exportProfile';
 
 type Props = {
   /** Raw caption text (may contain inline markdown). */
@@ -10,13 +11,16 @@ type Props = {
   /** Class applied to the wrapping element (caller owns caption layout styling). */
   className?: string;
   /**
-   * Clamp to 2 lines with a "查看更多" toggle (default). Set false to render
+   * Clamp to N lines with a "查看更多" toggle (default). Set false to render
    * the full text with no toggle — used on a still-generating node page where
    * the caption is streaming in and the expand/collapse interaction would be
    * meaningless (and jumpy).
    */
   clamp?: boolean;
 };
+
+// 导出形态下 caption 折叠到 1 行（超一行即出现「查看更多」）；在线 2 行。
+const CLAMP_LINES = IS_EXPORT ? 1 : 2;
 
 // Node captions are prose that may contain INLINE markdown (**bold**,
 // *italic*, `code`, ~~strike~~, [links](url)). We render with react-markdown
@@ -78,6 +82,7 @@ export function CaptionMarkdown({ text, className, clamp = true }: Props) {
       <span
         ref={textRef}
         className={expanded ? styles.full : styles.clamp}
+        style={!expanded ? ({ ['--clamp-lines' as string]: String(CLAMP_LINES) }) : undefined}
       >
         {md}
       </span>

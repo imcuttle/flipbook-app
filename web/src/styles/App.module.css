@@ -97,7 +97,8 @@
 
 .exportFooter {
   text-align: center;
-  padding: 16px 0 24px;
+  padding: 4px 0 12px;
+  margin-top: 4px;
   flex: 0 0 auto;
 }
 .exportFooterLink {
@@ -106,3 +107,9 @@
   text-decoration: none;
 }
 .exportFooterLink:hover { text-decoration: underline; }
+
+/* 导出形态：内容不必撑满 480px 视口高，去掉 .canvas 的 min-height，
+   让版权页脚紧贴内容下方，而不是被预留的空白推到很远。 */
+.exportWindow .canvas {
+  min-height: 0;
+}

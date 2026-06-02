@@ -702,7 +702,7 @@ export default function App() {
 
   return (
     <div className={`${styles.shell} ${state.fullscreen ? styles.fullscreen : ''}`}>
-      <div className={styles.window}>
+      <div className={`${styles.window} ${IS_EXPORT ? styles.exportWindow : ''}`}>
         <TopBar
           view={state.view}
           topic={state.topic}

@@ -8,10 +8,12 @@
   position: relative;
 }
 
-/* Collapsed: clamp to 2 lines. */
+/* Collapsed: clamp to N lines (default 2; export overrides to 1 via
+   --clamp-lines inline var set by CaptionMarkdown). */
 .clamp {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: var(--clamp-lines, 2);
+  line-clamp: var(--clamp-lines, 2);
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
